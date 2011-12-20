@@ -45,14 +45,12 @@ const KeyActionName KeyActionNames[] = {
    { search_backward,         "search_backward" },
    { find_next_forward,       "find_next_forward" },
    { find_next_backward,      "find_next_backward" },
-   { visual,                  "visual" },
    { cut,                     "cut" },
    { yank,                    "yank" },
    { paste_after,             "paste_after" },
    { paste_before,            "paste_before" },
    { undo,                    "undo" },
    { redo,                    "redo" },
-   { go,                      "go" },
    { quit,                    "quit" },
    { redraw,                  "redraw" },
    { command_mode,            "command_mode" },
@@ -61,18 +59,13 @@ const KeyActionName KeyActionNames[] = {
    { show_file_info,          "show_file_info" },
    { load_playlist,           "load_playlist" },
    { media_play,              "media_play" },
+   { media_next,              "media_next" }, 
    { media_pause,             "media_pause" },
    { media_stop,              "media_stop" },
-   { media_next,              "media_next" },
-   { media_prev,              "media_prev" },
-   { volume_increase,         "volume_increase" },
-   { volume_decrease,         "volume_decrease" },
    { seek_forward_seconds,    "seek_forward_seconds" },
    { seek_backward_seconds,   "seek_backward_seconds" },
    { seek_forward_minutes,    "seek_forward_minutes" },
-   { seek_backward_minutes,   "seek_backward_minutes" },
-   { toggle_forward,          "toggle_forward" },
-   { toggle_backward,         "toggle_backward" }
+   { seek_backward_minutes,   "seek_backward_minutes" }
 };
 const size_t KeyActionNamesSize = sizeof(KeyActionNames) / sizeof(KeyActionName);
 
@@ -81,61 +74,53 @@ const size_t KeyActionNamesSize = sizeof(KeyActionNames) / sizeof(KeyActionName)
 typedef struct {
    KeyAction      action;
    ActionHandler  handler;
-   bool           visual;
    KbaArgs        args;
 } KeyActionHandler;
 
 #define ARG_NOT_USED { .num = 0 }
 const KeyActionHandler KeyActionHandlers[] = {
-{ scroll_up,             kba_scroll_row,     true,  { .direction = UP }},
-{ scroll_down,           kba_scroll_row,     true,  { .direction = DOWN }},
-{ scroll_up_page,        kba_scroll_page,    true,  { .direction = UP,   .amount = SINGLE }},
-{ scroll_down_page,      kba_scroll_page,    true,  { .direction = DOWN, .amount = SINGLE }},
-{ scroll_up_halfpage,    kba_scroll_page,    true,  { .direction = UP,   .amount = HALF }},
-{ scroll_down_halfpage,  kba_scroll_page,    true,  { .direction = DOWN, .amount = HALF }},
-{ scroll_up_wholepage,   kba_scroll_page,    true,  { .direction = UP,   .amount = WHOLE }},
-{ scroll_down_wholepage, kba_scroll_page,    true,  { .direction = DOWN, .amount = WHOLE }},
-{ scroll_left,           kba_scroll_col,     true,  { .direction = LEFT,  .amount = SINGLE }},
-{ scroll_right,          kba_scroll_col,     true,  { .direction = RIGHT, .amount = SINGLE }},
-{ scroll_leftmost,       kba_scroll_col,     true,  { .direction = LEFT,  .amount = WHOLE }},
-{ scroll_rightmost,      kba_scroll_col,     true,  { .direction = RIGHT, .amount = WHOLE }},
-{ jumpto_screen_top,     kba_jumpto_screen,  true,  { .placement = TOP }},
-{ jumpto_screen_middle,  kba_jumpto_screen,  true,  { .placement = MIDDLE }},
-{ jumpto_screen_bottom,  kba_jumpto_screen,  true,  { .placement = BOTTOM }},
-{ jumpto_line,           kba_jumpto_file,    true,  { .scale = NUMBER, .num = 'G' }},
-{ jumpto_percent,        kba_jumpto_file,    true,  { .scale = PERCENT }},
-{ search_forward,        kba_search,         true,  { .direction = FORWARDS }},
-{ search_backward,       kba_search,         true,  { .direction = BACKWARDS }},
-{ find_next_forward,     kba_search_find,    true,  { .direction = SAME }},
-{ find_next_backward,    kba_search_find,    true,  { .direction = OPPOSITE }},
-{ visual,                kba_visual,         true,  ARG_NOT_USED },
-{ cut,                   kba_cut,            true,  ARG_NOT_USED },
-{ yank,                  kba_yank,           true,  ARG_NOT_USED },
-{ paste_after,           kba_paste,          false, { .placement = AFTER }},
-{ paste_before,          kba_paste,          false, { .placement = BEFORE }},
-{ undo,                  kba_undo,           false, ARG_NOT_USED },
-{ redo,                  kba_redo,           false, ARG_NOT_USED },
-{ go,                    kba_go,             true,  ARG_NOT_USED },
-{ quit,                  kba_quit,           false, ARG_NOT_USED },
-{ redraw,                kba_redraw,         false, ARG_NOT_USED },
-{ command_mode,          kba_command_mode,   false, ARG_NOT_USED },
-{ shell,                 kba_shell,          false, ARG_NOT_USED },
-{ switch_windows,        kba_switch_windows, false, ARG_NOT_USED },
-{ show_file_info,        kba_show_file_info, false, ARG_NOT_USED },
-{ load_playlist,         kba_load_playlist,  false, ARG_NOT_USED },
-{ media_play,            kba_play,           false, ARG_NOT_USED },
-{ media_pause,           kba_pause,          false, ARG_NOT_USED },
-{ media_stop,            kba_stop,           false, ARG_NOT_USED },
-{ media_next,            kba_play_next,      false, ARG_NOT_USED },
-{ media_prev,            kba_play_prev,      false, ARG_NOT_USED },
-{ volume_increase,       kba_volume,         false, { .direction = FORWARDS }},
-{ volume_decrease,       kba_volume,         false, { .direction = BACKWARDS }},
-{ seek_forward_seconds,  kba_seek,           false, { .direction = FORWARDS,  .scale = SECONDS, .num = 10 }},
-{ seek_backward_seconds, kba_seek,           false, { .direction = BACKWARDS, .scale = SECONDS, .num = 10 }},
-{ seek_forward_minutes,  kba_seek,           false, { .direction = FORWARDS,  .scale = MINUTES, .num = 1 }},
-{ seek_backward_minutes, kba_seek,           false, { .direction = BACKWARDS, .scale = MINUTES, .num = 1 }},
-{ toggle_forward,        kba_toggle,         false, { .direction = FORWARDS }},
-{ toggle_backward,       kba_toggle,         false, { .direction = BACKWARDS }}
+   {  scroll_up,              kba_scroll_row,   { .direction = UP }},
+   {  scroll_down,            kba_scroll_row,   { .direction = DOWN }},
+   {  scroll_up_page,         kba_scroll_page,  { .direction = UP,   .amount = SINGLE }},
+   {  scroll_down_page,       kba_scroll_page,  { .direction = DOWN, .amount = SINGLE }},
+   {  scroll_up_halfpage,     kba_scroll_page,  { .direction = UP,   .amount = HALF }},
+   {  scroll_down_halfpage,   kba_scroll_page,  { .direction = DOWN, .amount = HALF }},
+   {  scroll_up_wholepage,    kba_scroll_page,  { .direction = UP,   .amount = WHOLE }},
+   {  scroll_down_wholepage,  kba_scroll_page,  { .direction = DOWN, .amount = WHOLE }},
+   {  scroll_left,            kba_scroll_col,   { .direction = LEFT,  .amount = SINGLE }},
+   {  scroll_right,           kba_scroll_col,   { .direction = RIGHT, .amount = SINGLE }},
+   {  scroll_leftmost,        kba_scroll_col,   { .direction = LEFT,  .amount = WHOLE }},
+   {  scroll_rightmost,       kba_scroll_col,   { .direction = RIGHT, .amount = WHOLE }},
+   {  jumpto_screen_top,      kba_jumpto_screen,{ .placement = TOP }},
+   {  jumpto_screen_middle,   kba_jumpto_screen,{ .placement = MIDDLE }},
+   {  jumpto_screen_bottom,   kba_jumpto_screen,{ .placement = BOTTOM }},
+   {  jumpto_line,            kba_jumpto_file,  { .scale = NUMBER, .num = 'G' }},
+   {  jumpto_percent,         kba_jumpto_file,  { .scale = PERCENT }},
+   {  search_forward,         kba_search,       { .direction = FORWARDS }},
+   {  search_backward,        kba_search,       { .direction = BACKWARDS }},
+   {  find_next_forward,      kba_search_find,  { .direction = SAME }},
+   {  find_next_backward,     kba_search_find,  { .direction = OPPOSITE }},
+   {  cut,                    kba_cut,          ARG_NOT_USED },
+   {  yank,                   kba_yank,         ARG_NOT_USED },
+   {  paste_after,            kba_paste,        { .placement = AFTER }},
+   {  paste_before,           kba_paste,        { .placement = BEFORE }},
+   {  undo,                   kba_undo,            ARG_NOT_USED },
+   {  redo,                   kba_redo,            ARG_NOT_USED },
+   {  quit,                   kba_quit,            ARG_NOT_USED },
+   {  redraw,                 kba_redraw,          ARG_NOT_USED },
+   {  command_mode,           kba_command_mode,    ARG_NOT_USED },
+   {  shell,                  kba_shell,           ARG_NOT_USED },
+   {  switch_windows,         kba_switch_windows,  ARG_NOT_USED },
+   {  show_file_info,         kba_show_file_info,  ARG_NOT_USED },
+   {  load_playlist,          kba_load_playlist,   ARG_NOT_USED },
+   {  media_play,             kba_play,            ARG_NOT_USED },
+   {  media_next,             kba_next,            ARG_NOT_USED },
+   {  media_pause,            kba_pause,           ARG_NOT_USED },
+   {  media_stop,             kba_stop,            ARG_NOT_USED },
+   {  seek_forward_seconds,   kba_seek,   { .direction = FORWARDS,  .scale = SECONDS, .num = 10 }},
+   {  seek_backward_seconds,  kba_seek,   { .direction = BACKWARDS, .scale = SECONDS, .num = 10 }},
+   {  seek_forward_minutes,   kba_seek,   { .direction = FORWARDS,  .scale = MINUTES, .num = 1 }},
+   {  seek_backward_minutes,  kba_seek,   { .direction = BACKWARDS, .scale = MINUTES, .num = 1 }}
 };
 const size_t KeyActionHandlersSize = sizeof(KeyActionHandlers) / sizeof(KeyActionHandler);
 
@@ -146,9 +131,8 @@ typedef struct {
    KeyAction   action;
 } KeyBinding;
 
-#define MY_K_TAB     9
-#define MY_K_ENTER  13
-#define MY_K_ESCAPE 27
+#define MY_K_TAB    9
+#define MY_K_ENTER 13
 #define kb_CONTROL(x)   ((x) - 'a' + 1)
 
 const KeyBinding DefaultKeyBindings[] = {
@@ -184,15 +168,12 @@ const KeyBinding DefaultKeyBindings[] = {
    { '?',               search_backward },
    { 'n',               find_next_forward },
    { 'N',               find_next_backward },
-   { 'v',               visual },
-   { 'V',               visual },
    { 'd',               cut },
    { 'y',               yank },
    { 'p',               paste_after },
    { 'P',               paste_before },
    { 'u',               undo },
    { kb_CONTROL('r'),   redo },
-   { 'g',               go },
    { kb_CONTROL('c'),   quit },
    { kb_CONTROL('/'),   quit },
    { kb_CONTROL('l'),   redraw },
@@ -211,13 +192,7 @@ const KeyBinding DefaultKeyBindings[] = {
    { 'F',               seek_forward_minutes },
    { '}',               seek_forward_minutes },
    { 'B',               seek_backward_minutes },
-   { '{',               seek_backward_minutes },
-   { '(',               media_prev },
-   { ')',               media_next },
-   { '<',               volume_decrease },
-   { '>',               volume_increase },
-   { 't',               toggle_forward },
-   { 'T',               toggle_backward }
+   { '{',               seek_backward_minutes }
 };
 const size_t DefaultKeyBindingsSize = sizeof(DefaultKeyBindings) / sizeof(KeyBinding);
 
@@ -346,7 +321,7 @@ kb_unbind_all()
 }
 
 bool
-kb_str2action(const char *s, KeyAction *action)
+kb_str2action(char *s, KeyAction *action)
 {
    size_t i;
 
@@ -407,14 +382,8 @@ kb_execute(KeyCode k)
    size_t i;
    bool   found;
 
-   /* visual mode and ESC pressed ?*/
-   if (visual_mode_start != -1 && k == MY_K_ESCAPE) {
-	   visual_mode_start = -1;
-	   return true;
-   }
-
    /* Is the key bound? */
-   found  = false;
+   found = false;
    action = -1;
    for (i = 0; i < KeyBindingsSize; i++) {
       if (KeyBindings[i].key == k) {
@@ -429,33 +398,14 @@ kb_execute(KeyCode k)
    /* Execute theaction handler. */
    for (i = 0; i < KeyActionHandlersSize; i++) {
       if (KeyActionHandlers[i].action == action) {
-         if (visual_mode_start == -1 || KeyActionHandlers[i].visual) {
-            ((KeyActionHandlers[i].handler)(KeyActionHandlers[i].args));
-            return true;
-         }
-      }
-   }
-
-   return false;
-}
-
-bool
-kb_execute_by_name(const char *name)
-{
-   KeyAction   a;
-   size_t      x;
-
-   if (!kb_str2action(name, &a))
-      return false;
-
-   for(x = 0; x < KeyActionHandlersSize; x++) {
-      if(a == KeyActionHandlers[x].action) {
-         KeyActionHandlers[x].handler(KeyActionHandlers[x].args);
+         ((KeyActionHandlers[i].handler)(KeyActionHandlers[i].args));
          return true;
       }
    }
+
    return false;
 }
+
 
 
 /*****************************************************************************
@@ -463,15 +413,6 @@ kb_execute_by_name(const char *name)
  *                     Individual Keybinding Handlers
  *
  ****************************************************************************/
-
-KbaArgs
-get_dummy_args()
-{
-   KbaArgs dummy = { .direction = -1, .scale = -1, .amount = -1,
-      .placement = -1, .num = -1 };
-
-   return dummy;
-}
 
 void
 kba_scroll_row(KbaArgs a)
@@ -789,19 +730,6 @@ kba_jumpto_file(KbaArgs a)
 }
 
 void
-kba_go(KbaArgs a UNUSED)
-{
-   /* NOTE: While I intend to support most of vim's g* commands, currently
-    *       this only supports 'gg' ... simply because I use it.
-    */
-   KbaArgs args = get_dummy_args();
-
-   args.scale = NUMBER;
-   args.num   = 'g';
-   kba_jumpto_file(args);
-}
-
-void
 kba_search(KbaArgs a)
 {
    const char *errmsg = NULL;
@@ -849,7 +777,6 @@ kba_search(KbaArgs a)
    free(search_phrase);
 
    /* do the search */
-   find_args = get_dummy_args();
    find_args.direction = SAME;
    kba_search_find(find_args);
 }
@@ -915,7 +842,6 @@ kba_search_find(KbaArgs a)
             paint_message(msg);
 
          gnum_set(idx + 1);
-         foo = get_dummy_args();
          foo.scale = NUMBER;
          foo.num = 'G';
          kba_jumpto_file(foo);
@@ -924,23 +850,6 @@ kba_search_find(KbaArgs a)
    }
 
    paint_error("Pattern not found: %s", mi_query_getraw());
-}
-
-
-void
-kba_visual(KbaArgs a UNUSED)
-{
-   if (ui.active == ui.library) {
-      paint_message("No visual mode in library window.  Sorry.");
-      return;
-   }
-
-   if (visual_mode_start == -1)
-      visual_mode_start = ui.active->voffset + ui.active->crow;
-   else
-      visual_mode_start = -1;
-
-   paint_playlist();
 }
 
 /*
@@ -959,49 +868,37 @@ kba_cut(KbaArgs a UNUSED)
    int   input;
    int   n;
 
-   if (visual_mode_start != -1) {
-      start = visual_mode_start;
-      end = ui.active->voffset + ui.active->crow;
-      visual_mode_start = -1;
-      if (start > end) {
-         int tmp = end;
-         end = start;
-         start = tmp;
-      }
-      end++;
-   } else {
-      /* determine range */
-      n = 1;
-      if (gnum_get() > 0) {
-         n = gnum_get();
-         gnum_clear();
-      }
-   
-      /* get range */
-      got_target = false;
-      start = 0;
-      end = 0;
-      while ((input = getch()) && !got_target) {
-         if (input == ERR)
-            continue;
-   
-         switch (input) {
-            case 'd':   /* delete next n lines */
-               start = ui.active->voffset + ui.active->crow;
-               end = start + n;
-               got_target = true;
-               break;
-   
-            case 'G':   /* delete to end of current playlist */
-               start = ui.active->voffset + ui.active->crow;
-               end = ui.active->nrows;
-               got_target = true;
-               break;
-   
-            default:
-               ungetch(input);
-               return;
-         }
+   /* determine range */
+   n = 1;
+   if (gnum_get() > 0) {
+      n = gnum_get();
+      gnum_clear();
+   }
+
+   /* get range */
+   got_target = false;
+   start = 0;
+   end = 0;
+   while ((input = getch()) && !got_target) {
+      if (input == ERR)
+         continue;
+
+      switch (input) {
+         case 'd':   /* delete next n lines */
+            start = ui.active->voffset + ui.active->crow;
+            end = start + n;
+            got_target = true;
+            break;
+
+         case 'G':   /* delete to end of current playlist */
+            start = ui.active->voffset + ui.active->crow;
+            end = ui.active->nrows;
+            got_target = true;
+            break;
+
+         default:
+            ungetch(input);
+            return;
       }
    }
 
@@ -1091,7 +988,6 @@ kba_cut(KbaArgs a UNUSED)
 
    /* redraw */
    paint_playlist();
-   paint_library();
    paint_message("%d fewer files.", end - start);
 }
 
@@ -1113,54 +1009,43 @@ kba_yank(KbaArgs a UNUSED)
       return;
    }
 
-   if (visual_mode_start != -1) {
-      start = visual_mode_start;
-      end = ui.active->voffset + ui.active->crow;
-      visual_mode_start = -1;
-      if (start > end) {
-         int tmp = end;
-         end = start;
-         start = tmp;
-      }
-      end++;
-   } else {
-      /* determine range */
-      n = 1;
-      if (gnum_get() > 0) {
-         n = gnum_get();
-         gnum_clear();
-      }
-      /* get next input from user */
-      got_target = false;
-      start = 0;
-      end = 0;
-      while ((input = getch()) && !got_target) {
-         if (input == ERR)
-            continue;
-   
-         switch (input) {
-            case 'y':   /* yank next n lines */
-               start = ui.active->voffset + ui.active->crow;
-               end = start + n;
-               got_target = true;
-               break;
-   
-            case 'G':   /* yank to end of current playlist */
-               start = ui.active->voffset + ui.active->crow;
-               end = ui.active->nrows;
-               got_target = true;
-               break;
-   
-            /*
-             * TODO handle other directions ( j/k/H/L/M/^u/^d/ etc. )
-             * here.  this will be ... tricky.
-             * might want to re-organize other stuff?
-             */
-   
-            default:
-               ungetch(input);
-               return;
-         }
+   /* determine range */
+   n = 1;
+   if (gnum_get() > 0) {
+      n = gnum_get();
+      gnum_clear();
+   }
+
+   /* get next input from user */
+   got_target = false;
+   start = 0;
+   end = 0;
+   while ((input = getch()) && !got_target) {
+      if (input == ERR)
+         continue;
+
+      switch (input) {
+         case 'y':   /* yank next n lines */
+            start = ui.active->voffset + ui.active->crow;
+            end = start + n;
+            got_target = true;
+            break;
+
+         case 'G':   /* yank to end of current playlist */
+            start = ui.active->voffset + ui.active->crow;
+            end = ui.active->nrows;
+            got_target = true;
+            break;
+
+         /*
+          * TODO handle other directions ( j/k/H/L/M/^u/^d/ etc. )
+          * here.  this will be ... tricky.
+          * might want to re-organize other stuff?
+          */
+
+         default:
+            ungetch(input);
+            return;
       }
    }
 
@@ -1173,7 +1058,6 @@ kba_yank(KbaArgs a UNUSED)
    for (n = start; n < end; n++)
       ybuffer_add(viewing_playlist->files[n]);
 
-   paint_playlist();
    /* notify user # of rows yanked */
    paint_message("Yanked %d files.", end - start);
 }
@@ -1297,7 +1181,15 @@ kba_redo(KbaArgs a UNUSED)
 void
 kba_command_mode(KbaArgs a UNUSED)
 {
+   const char *errmsg = NULL;
    char  *cmd;
+   char **argv;
+   int    argc;
+   int    num_matches;
+   bool   found;
+   int    found_idx = 0;
+   int    i;
+
 
    /* get command from user */
    if (user_getstr(":", &cmd) != 0 || strlen(cmd) == 0) {
@@ -1313,9 +1205,34 @@ kba_command_mode(KbaArgs a UNUSED)
       return;
    }
 
-   cmd_execute(cmd);
+   /* convert to argc/argv structure */
+   if (str2argv(cmd, &argc, &argv, &errmsg) != 0) {
+      paint_error("parse error: %s in '%s'", errmsg, cmd);
+      free(cmd);
+      return;
+   }
+
+   /* search path for appropriate command to execute */
+   found = false;
+   num_matches = 0;
+   for (i = 0; i < CommandPathSize; i++) {
+      if (match_command_name(argv[0], CommandPath[i].name)) {
+         found = true;
+         found_idx = i;
+         num_matches++;
+      }
+   }
+
+   /* execute command or indicate failure */
+   if (found && num_matches == 1)
+      (CommandPath[found_idx].func)(argc, argv);
+   else if (num_matches > 1)
+      paint_error("Ambiguous abbreviation '%s'", argv[0]);
+   else
+      paint_error("Unknown command '%s'", argv[0]);
+
+   argv_free(&argc, &argv);
    free(cmd);
-   return;
 }
 
 void
@@ -1352,15 +1269,18 @@ kba_switch_windows(KbaArgs a UNUSED)
 {
    if (ui.active == ui.library) {
       ui.active = ui.playlist;
-      if (ui.lhide)
+      if (ui.lhide) {
          ui_hide_library();
+         paint_all();
+      }
    } else {
       ui.active = ui.library;
-      if (ui.lhide)
+      if (ui.lhide) {
          ui_unhide_library();
+         paint_all();
+      }
    }
 
-   paint_all();
    paint_status_bar();
 }
 
@@ -1389,6 +1309,7 @@ kba_show_file_info(KbaArgs a UNUSED)
 void
 kba_load_playlist(KbaArgs a UNUSED)
 {
+   KbaArgs dummy;
    int  idx;
 
    if (ui.active == ui.library) {
@@ -1401,7 +1322,7 @@ kba_load_playlist(KbaArgs a UNUSED)
       ui.playlist->hoffset = 0;
 
       paint_playlist();
-      kba_switch_windows(get_dummy_args());
+      kba_switch_windows(dummy);
    } else {
       /* play song */
       if (ui.active->crow >= ui.active->nrows) {
@@ -1417,6 +1338,7 @@ kba_load_playlist(KbaArgs a UNUSED)
 void
 kba_play(KbaArgs a UNUSED)
 {
+   KbaArgs dummy;
    int  idx;
 
    if (ui.active == ui.library) {
@@ -1429,7 +1351,7 @@ kba_play(KbaArgs a UNUSED)
       ui.playlist->hoffset = 0;
 
       paint_playlist();
-      kba_switch_windows(get_dummy_args());
+      kba_switch_windows(dummy);
    } else {
       /* play song */
       if (ui.active->crow >= ui.active->nrows) {
@@ -1440,6 +1362,11 @@ kba_play(KbaArgs a UNUSED)
       playing_playlist = viewing_playlist;
       player_play();
    }
+}
+
+void kba_next(KbaArgs a UNUSED)
+{
+   player_play_next_song();
 }
 
 void
@@ -1453,57 +1380,6 @@ kba_stop(KbaArgs a UNUSED)
 {
    player_stop();
    playing_playlist = NULL;
-}
-
-void
-kba_play_next(KbaArgs a UNUSED)
-{
-   int n = 1;
-
-   /* is there a multiplier? */
-   if (gnum_get() > 0) {
-      n = gnum_get();
-      gnum_clear();
-   }
-
-   player_skip_song(n);
-}
-
-void
-kba_play_prev(KbaArgs a UNUSED)
-{
-   int n = 1;
-
-   /* is there a multiplier? */
-   if (gnum_get() > 0) {
-      n = gnum_get();
-      gnum_clear();
-   }
-
-   player_skip_song(n * -1);
-}
-
-void
-kba_volume(KbaArgs a)
-{
-   float pcnt;
-
-   if (gnum_get() > 0)
-      pcnt = gnum_retrieve();
-   else
-      pcnt = 1;
-
-   switch (a.direction) {
-   case FORWARDS:
-      break;
-   case BACKWARDS:
-      pcnt *= -1;
-      break;
-   default:
-      errx(1, "kba_volume: invalid direction");
-   }
-
-   player_volume_step(pcnt);
 }
 
 void
@@ -1544,65 +1420,6 @@ kba_seek(KbaArgs a)
 
    /* apply n & seek */
    player_seek(secs * n);
-}
-
-void
-kba_toggle(KbaArgs a)
-{
-   toggle_list *t;
-   char  *cmd;
-   bool   got_register;
-   int    n, input, registr;
-
-   /* is there a multiplier? */
-   n = 1;
-   if (gnum_get() > 0) {
-      n = gnum_get();
-      gnum_clear();
-   }
-
-   /* get the register */
-   got_register = false;
-   registr = -1;
-   while ((input = getch()) && !got_register) {
-      if (input == ERR)
-         continue;
-
-      if (('a' <= input && input <= 'z')
-      ||  ('A' <= input && input <= 'Z')) {
-         got_register = true;
-         registr = input;
-      }
-   }
-
-   /* get the command to execute */
-   if ((t = toggle_get(registr)) == NULL) {
-      paint_error("No toggle list in register %c (%i).", registr, registr);
-      return;
-   }
-
-   /* update index */
-   n %= t->size;
-   switch (a.direction) {
-      case FORWARDS:
-         t->index += n;
-         t->index %= t->size;
-         break;
-      case BACKWARDS:
-         if (n <= (int)t->index) {
-            t->index -= n;
-            t->index %= t->size;
-         } else {
-            t->index = t->size - (n - t->index);
-         }
-         break;
-      default:
-         errx(1, "%s: invalid direction", __FUNCTION__);
-   }
-
-   /* execute */
-   cmd = t->commands[t->index];
-   cmd_execute(cmd);
 }
 
 
@@ -1763,22 +1580,14 @@ match_command_name(const char *input, const char *cmd)
 void
 execute_external_command(const char *cmd)
 {
-   int   input;
-
    def_prog_mode();
    endwin();
 
    system(cmd);
-   printf("\nPress ENTER or type command to continue");
+   printf("\nPress ENTER to continue");
    fflush(stdout);
-   raw();
-   while(!VSIG_QUIT) {
-      if ((input = getch()) && input != ERR) {
-         if (input != '\r')
-            ungetch(input);
-         break;
-      }
-   }
+   while (getchar() != '\n');
+
    reset_prog_mode();
    paint_all();
 }

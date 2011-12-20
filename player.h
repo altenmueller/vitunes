@@ -17,15 +17,25 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
+#include <sys/wait.h>
+#include <sys/types.h>
+
 #include <err.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-#include "playlist.h"
-#include "compat.h"
-#include "paint.h"
 #include "debug.h"
+#include "meta_info.h"
+#include "playlist.h"
 
-/* "static" backends (those that aren't dynamically loaded) */
-#include "players/mplayer.h"
+#include "compat.h"
+
 
 /*
  * Available play-modes.
@@ -34,84 +44,75 @@
  *    Random:  Songs are chosen at random and play never ends
  */
 typedef enum {
-   MODE_LINEAR,
-   MODE_LOOP,
-   MODE_RANDOM
+   PLAYER_MODE_LINEAR,
+   PLAYER_MODE_LOOP,
+   PLAYER_MODE_RANDOM
 } playmode;
 
 
-/* player setup/destroy functions */
-void player_init(const char *backend);
-void player_destroy();
+/*
+ * The following global structure used to track status of the child process
+ * used to play the media.  It is updated by the player_monitor function and
+ * used elsewhere (paint_player) to determine if the child is playing, and
+ * if so, where it's at in the current song.
+ */
+typedef struct {
+   bool  playing;    /* playing or not (still true if paused) */
+   bool  paused;     /* if paused or not */
+   float position;   /* position, in seconds, into currently playing file */
+} player_status_t;
+extern player_status_t player_status;
 
+
+/*
+ * This global structure encapsulates info about the child process used to
+ * play the media.  It includes the current play queue and location within
+ * the queue.
+ */
+typedef struct {
+   /* child process and pipe info */
+   char    *program;    /* program to execute */
+   char   **pargs;      /* arguments to program */
+   pid_t    pid;        /* process id */
+   int      pipe_read;  /* read-end of pipe */
+   int      pipe_write; /* write-end of pipe */
+
+   /* currently playing queue information */
+   playmode  mode;      /* playback mode */
+   playlist *queue;     /* pointer to playlist */
+   int       qidx;      /* index of currently playing file in the queue */
+
+   /* seed used by rand(3) */
+   int       rseed;
+
+} player_t;
+extern player_t player;
+
+
+/* initialize all player & player_status info. */
+void player_init(char *prog, char *pargs[], playmode mode);
+
+/* for starting, stoping, and restarting the child process player */
+void player_child_launch();
+void player_child_relaunch();
+void player_child_kill();
+
+/* setup player queue */
 void player_set_queue(playlist *queue, int position);
+
+void player_send_cmd(const char *cmd);
 
 /* player control functions */
 void player_play();
+void player_play_next_song();
 void player_stop();
 void player_pause();
 void player_seek(int seconds);
-void player_skip_song(int num);
-void player_volume_step(float percent);
 
-/* This is called periodically to monitor the backend player */
+/*
+ * This should be called periodically to monitor the child media player
+ * process and update the global player_status object
+ */
 void player_monitor();
-
-
-/* Available back-end players */
-typedef enum {
-   BACKEND_MPLAYER,
-   BACKEND_GSTREAMER
-} backend_id;
-
-
-/* player backends */
-typedef struct {
-   backend_id  type;
-   char       *name;
-
-   /* for dynamically loaded backends */
-   bool  dynamic;    /* true if dlopen(3) required */
-   char *lib_name;   /* name of dynamic lib */
-
-   /* setup/destroy functions */
-   void (*start)(void);
-   void (*finish)(void);
-   void (*sigchld)(void);
-
-   /* playback control */
-   void (*play)(const char*);
-   void (*stop)(void);
-   void (*pause)(void);
-   void (*seek)(int);
-   void (*volume_step)(float);
-
-   /* query functions */
-   float (*position)(void);
-   float (*volume)(void);
-   bool  (*playing)(void);
-   bool  (*paused)(void);
-
-   /* callback functions */
-   void (*set_callback_playnext)(void (*f)(void));
-   void (*set_callback_notice)(void (*f)(char *, ...));
-   void (*set_callback_error)(void (*f)(char *, ...));
-   void (*set_callback_fatal)(void (*f)(char *, ...));
-
-   /* monitor function */
-   void (*monitor)(void);
-} player_backend_t;
-extern player_backend_t player;
-
-
-/* vitunes-specific record keeping about the player */
-typedef struct {
-   playmode  mode;   /* playback mode */
-   playlist *queue;  /* pointer to playlist */
-   int       qidx;   /* index into currently playing playlist */
-
-   int       rseed;  /* seed used by rand(3) */
-} player_info_t;
-extern player_info_t player_info;
 
 #endif

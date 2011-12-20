@@ -56,9 +56,6 @@ typedef struct {
    int   playing_library;
    int   playing_playlist;
 
-   /* current row in inactive window */
-   int   current_inactive;
-
    /* individual fields in the playlist window */
    int   cinfos[MI_NUM_CINFO];
    bool  cinfos_set[MI_NUM_CINFO];

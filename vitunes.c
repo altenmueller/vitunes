@@ -16,7 +16,7 @@
 
 #include "vitunes.h"
 #include "config.h"     /* NOTE: must be after vitunes.h */
-#include "socket.h"
+
 
 /*****************************************************************************
  * GLOBALS, EXPORTED
@@ -26,14 +26,11 @@
 playlist *viewing_playlist;
 playlist *playing_playlist;
 
-/* visual mode start position */
-int visual_mode_start = -1;
-
 /* signal flags */
 volatile sig_atomic_t VSIG_QUIT = 0;            /* 1 = quit vitunes */
 volatile sig_atomic_t VSIG_RESIZE = 0;          /* 1 = resize display */
-volatile sig_atomic_t VSIG_SIGCHLD = 0;         /* 1 = got sigchld */
 volatile sig_atomic_t VSIG_PLAYER_MONITOR = 0;  /* 1 = update player stats */
+volatile sig_atomic_t VSIG_PLAYER_RESTART = 0;  /* 1 = restart player */
 
 /*
  * enum used for QUIT_CAUSE values. Currently only one is used, but might add
@@ -62,7 +59,7 @@ char *vitunes_dir;
 char *conf_file;
 char *db_file;
 char *playlist_dir;
-char *player_backend;
+char *player_path;
 
 
 /*****************************************************************************
@@ -79,11 +76,9 @@ void setup_timer();
 int
 main(int argc, char *argv[])
 {
-   char  *home;
+   struct passwd *pwd;
    int    previous_command;
    int    input;
-   int    sock = -1;
-   fd_set fds;
 
 #ifdef DEBUG
    if ((debug_log = fopen("vitunes-debug.log", "w")) == NULL)
@@ -95,30 +90,22 @@ main(int argc, char *argv[])
     *----------------------------------------------------------------------*/
 
    /* get home dir */
-   if ((home = getenv("HOME")) == NULL)
-      errx(1, "$HOME not set. Can't find my config files.");
+   if ((pwd = getpwuid(getuid())) == NULL)
+      errx(1, "invalid user %d", getuid());
 
-   /* build paths & other needed strings */
-   asprintf(&vitunes_dir,    VITUNES_DIR_FMT,  home);
-   asprintf(&conf_file,      CONF_FILE_FMT,    home);
-   asprintf(&db_file,        DB_FILE_FMT,      home);
-   asprintf(&playlist_dir,   PLAYLIST_DIR_FMT, home);
-   asprintf(&player_backend, "%s", DEFAULT_PLAYER_BACKEND);
+   /* build paths */
+   asprintf(&vitunes_dir,   VITUNES_DIR_FMT,  pwd->pw_dir);
+   asprintf(&conf_file,     CONF_FILE_FMT,    pwd->pw_dir);
+   asprintf(&db_file,       DB_FILE_FMT,      pwd->pw_dir);
+   asprintf(&playlist_dir,  PLAYLIST_DIR_FMT, pwd->pw_dir);
    if (vitunes_dir == NULL || conf_file == NULL
-   ||  db_file == NULL     || playlist_dir == NULL
-   ||  player_backend == NULL)
+   ||  db_file == NULL     || playlist_dir == NULL)
       err(1, "failed to create needed file names");
+
+   player_path = DEFAULT_PLAYER_PATH;
 
    /* handle command-line switches & e-commands */
    handle_switches(argc, argv);
-
-   if(sock_send_msg(VITUNES_RUNNING) != -1) {
-      printf("Vitunes appears to be running already. Won't open socket.");
-   } else {
-      if((sock = sock_listen()) == -1)
-         errx(1, "failed to open socket.");
-   }
-
 
    /*
     * IF we've reached here, then there were no e-commands.
@@ -130,7 +117,7 @@ main(int argc, char *argv[])
     * initialize stuff
     *--------------------------------------------------------------------- */
 
-   /* setup signal handlers (XXX must be before player_init) */
+   /* setup signal handlers (XXX must be before player_child_launch) */
    signal(SIGPIPE,  SIG_IGN);          /* broken pipe with child (ignore) */
    signal(SIGCHLD,  signal_handler);   /* child died */
    signal(SIGHUP,   signal_handler);   /* quit */
@@ -145,16 +132,15 @@ main(int argc, char *argv[])
    mi_sort_init();         /* global sort description */
    mi_display_init();      /* global display description */
    ybuffer_init();         /* global yank/copy buffer */
-   toggleset_init();       /* global toggleset (list of toggle-lists) */
 
    /* load media library (database and all playlists) & sort */
    medialib_load(db_file, playlist_dir);
    if (mdb.library->nfiles == 0) {
       printf("The vitunes database is currently empty.\n");
       printf("See 'vitunes -e help add' for how to add files.");
+      player_child_kill();
       return 0;
    }
-
    /* apply default sort to library */
    qsort(mdb.library->files, mdb.library->nfiles, sizeof(meta_info*), mi_compare);
 
@@ -168,16 +154,22 @@ main(int argc, char *argv[])
    ui.library->nrows  = mdb.nplaylists;
    playing_playlist = NULL;
 
+   /* start media player child */
+   player_init(player_path, DEFAULT_PLAYER_ARGS, DEFAULT_PLAYER_MODE);
+   player_child_launch();
+
    /* load config file and run commands in it now */
    load_config();
 
-   /* start media player child */
-   player_init(player_backend);
-   player_info.mode = DEFAULT_PLAYER_MODE;
-   atexit(player_destroy);
-
    /* initial painting of the display */
    paint_all();
+
+   /* scripting hack */
+   FILE* script_file;
+   char script_filename[256];
+   char script_input[10];
+   strcpy( script_filename, getenv("HOME") );
+   strcat( script_filename, "/.vitunes_script" );
 
    /* -----------------------------------------------------------------------
     * begin input loop
@@ -185,41 +177,34 @@ main(int argc, char *argv[])
 
    previous_command = -1;
    while (!VSIG_QUIT) {
-      struct timeval  tv;
 
       /* handle any signal flags */
-      process_signals();
+      process_signals(true);
 
-      tv.tv_sec = 1;
-      tv.tv_usec = 0;
-
-      FD_ZERO(&fds);
-      FD_SET(0, &fds);
-      if(sock > 0)
-         FD_SET(sock, &fds);
-      errno = 0;
-      if(select((sock > 0 ? sock : 0) + 1, &fds, NULL, NULL, &tv) == -1) {
-         if(errno == 0 || errno == EINTR)
-            continue;
-         break;
+      /* handle any available input */
+      if ((input = getch()) && input != ERR) {
+         if (isdigit(input) &&  (input != '0' || gnum_get() > 0))
+            gnum_add(input - '0');
+         else if (input == '\n' && gnum_get() > 0 && previous_command >= 0)
+            kb_execute(previous_command);
+         else
+            kb_execute(input);
+      }
+      /* input file for scripting */
+      else if ( gnum_get() == 0 )
+      {
+         script_file = fopen( script_filename, "r+" );
+	 if ( script_file )
+	 {
+	    if ( fgets( script_input, 9, script_file ) )
+	    {
+	       kb_execute( script_input[0] );
+	       fclose( script_file );
+	       remove( script_filename );
+	    }
+	 }
       }
 
-      if(sock > 0) {
-         if(FD_ISSET(sock, &fds))
-            sock_recv_and_exec(sock);
-      }
-
-      if(FD_ISSET(0, &fds)) {
-         /* handle any available input */
-         if ((input = getch()) && input != ERR) {
-            if (isdigit(input) &&  (input != '0' || gnum_get() > 0))
-               gnum_add(input - '0');
-            else if (input == '\n' && gnum_get() > 0 && previous_command >= 0)
-               kb_execute(previous_command);
-            else
-               kb_execute(input);
-         }
-      }
    }
 
    /* -----------------------------------------------------------------------
@@ -227,18 +212,17 @@ main(int argc, char *argv[])
     * -------------------------------------------------------------------- */
 
    ui_destroy();
-   player_destroy();
+   player_child_kill();
    medialib_destroy();
 
    mi_query_clear();
    ybuffer_free();
-   toggleset_free();
 
    /* do we have any odd cause for quitting? */
    if (QUIT_CAUSE != EXIT_NORMAL) {
       switch (QUIT_CAUSE) {
          case BAD_PLAYER:
-            warnx("It appears the media player is misbehaving.  Apologies.");
+            warnx("media player '%s' is not executing", player.program);
             break;
       }
    }
@@ -276,19 +260,19 @@ signal_handler(int sig)
          VSIG_RESIZE = 1;
          break;
       case SIGCHLD:
-         VSIG_SIGCHLD = 1;
+         VSIG_PLAYER_RESTART = 1;
          break;
    }
 }
 
 /* handle any signal flags */
 void
-process_signals()
+process_signals(bool do_paint_message)
 {
    static playlist *prev_queue = NULL;
    static int       prev_qidx = -1;
    static bool      prev_is_playing = false;
-   static float     prev_volume = -1;
+   static time_t    last_sigchld = -1;
 
    /* handle resize event */
    if (VSIG_RESIZE) {
@@ -302,38 +286,44 @@ process_signals()
    if (VSIG_PLAYER_MONITOR) {
       player_monitor();
 
-      if (prev_is_playing || player.playing())
+      if (prev_is_playing || player_status.playing)
          paint_player();
 
       /* need to repaint anything else? */
-      if (prev_is_playing != player.playing()) {
+      if (prev_is_playing != player_status.playing) {
          paint_library();
          paint_playlist();
-      } else if (prev_queue != player_info.queue) {
+      } else if (prev_queue != player.queue) {
          paint_library();
          if (prev_queue == viewing_playlist) {
             paint_playlist();
          }
       }
-      if (player_info.queue == viewing_playlist
-      &&  prev_qidx != player_info.qidx) {
+      if (player.queue == viewing_playlist && prev_qidx != player.qidx) {
          paint_playlist();
       }
-      if (prev_volume != player.volume()) {
-         paint_message("volume: %3.0f%%", player.volume());
-         prev_volume = player.volume();
-      }
 
-      prev_queue = player_info.queue;
-      prev_qidx = player_info.qidx;
-      prev_is_playing = player.playing();
+      prev_queue = player.queue;
+      prev_qidx = player.qidx;
+      prev_is_playing = player_status.playing;
       VSIG_PLAYER_MONITOR = 0;
    }
 
    /* restart player if needed */
-   if (VSIG_SIGCHLD) {
-      if (player.sigchld != NULL) player.sigchld();
-      VSIG_SIGCHLD = 0;
+   if (VSIG_PLAYER_RESTART) {
+      /* ignore children launched from a '!' */
+      if (kill(player.pid, 0) != 0) {
+         /* if too frequent, quit */
+         if (time(0) - last_sigchld <= 1) {
+            QUIT_CAUSE = BAD_PLAYER;
+            VSIG_QUIT = 1;
+         } else {
+            player_child_relaunch();
+            if (do_paint_message)
+               paint_message("child player died. re-launched.");
+         }
+      }
+      VSIG_PLAYER_RESTART = 0;
    }
 }
 
@@ -454,16 +444,9 @@ handle_switches(int argc, char *argv[])
 {
    int ch;
    int i;
-   int had_c_commands = 0;
 
-   while ((ch = getopt(argc, argv, "he:f:d:p:m:c:")) != -1) {
+   while ((ch = getopt(argc, argv, "he:f:d:p:m:")) != -1) {
       switch (ch) {
-         case 'c':
-            if(sock_send_msg(optarg) == -1)
-               errx(1, "Failed to send message. Vitunes not running?");
-            had_c_commands = 1;
-            break;
-
          case 'd':
             if ((db_file = strdup(optarg)) == NULL)
                err(1, "handle_switches: strdup db_file failed");
@@ -489,8 +472,8 @@ handle_switches(int argc, char *argv[])
             break;
 
          case 'm':
-            if ((player_backend = strdup(optarg)) == NULL)
-               err(1, "handle_switches: strdup player_backend failed");
+            if ((player_path = strdup(optarg)) == NULL)
+               err(1, "handle_switches: strdup player_path failed");
             break;
 
          case 'p':
@@ -505,9 +488,6 @@ handle_switches(int argc, char *argv[])
             /* NOT REACHED */
       }
    }
-
-   if(had_c_commands)
-      exit(0);
 
    return 0;
 }

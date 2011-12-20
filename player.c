@@ -16,243 +16,299 @@
 
 #include "player.h"
 
-/* gloabls */
-player_backend_t player;
-player_info_t player_info;
+/* global structs defined in player.h */
+player_status_t player_status;
+player_t player;
 
 
-/* callbacks */
-static void callback_playnext() { player_skip_song(1); }
-
-static void
-callback_fatal(char *fmt, ...)
+/*
+ * Initialize the player and player_status global structs.  Everything is set
+ * to non-functional values.  These are used elsewhere to indicate that the
+ * child process is not running.
+ */
+void
+player_init(char *prog, char *pargs[], playmode mode)
 {
-   va_list ap;
+   /* player status init */
+   player_status.playing = false;
+   player_status.paused = false;
+   player_status.position = -1;
 
-   ui_destroy();
+   /* player init */
+   player.program = prog;
+   player.pargs = pargs;
+   player.pid = -1;
+   player.pipe_read  = -1;
+   player.pipe_write = -1;
 
-   fprintf(stderr,"The player-backend '%s' has experienced a fatal error:\n",
-         player.name);
+   player.mode = mode;
+   player.queue = NULL;
+   player.qidx = -1;
 
-   va_start(ap, fmt);
-   vfprintf(stderr, fmt, ap);
-   va_end(ap);
-
-   fflush(stderr);
-
-   VSIG_QUIT = 1;
-   exit(1);
+   player.rseed = time(0);
+   srand(player.rseed);
 }
 
+/*****************************************************************************
+ * stuff for starting, stoping, and re-starting child process
+ ****************************************************************************/
 
-/* definition of backends */
-const player_backend_t PlayerBackends[] = { 
-   {   
-      BACKEND_MPLAYER, "mplayer", false, NULL,
-      mplayer_start,
-      mplayer_finish,
-      mplayer_sigchld,
-      mplayer_play,
-      mplayer_stop,
-      mplayer_pause,
-      mplayer_seek,
-      mplayer_volume_step,
-      mplayer_get_position,
-      mplayer_get_volume,
-      mplayer_is_playing,
-      mplayer_is_paused,
-      mplayer_set_callback_playnext,
-      mplayer_set_callback_notice,
-      mplayer_set_callback_error,
-      mplayer_set_callback_fatal,
-      mplayer_monitor
-   },  
-   { 0, "", false, NULL, NULL, NULL, NULL,
-      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
-};
-const size_t PlayerBackendsSize = sizeof(PlayerBackends) / sizeof(player_backend_t);
-
-
-/* setup/destroy functions */
 void
-player_init(const char *backend)
+player_child_launch()
 {
-   bool   found;
-   size_t i;
+   int pwrite[2];
+   int pread[2];
+   int flags;
 
-   player_info.mode  = MODE_LINEAR;
-   player_info.queue = NULL;
-   player_info.qidx  = -1;
+   if (pipe(pwrite) == -1 || pipe(pread) == -1)
+      err(1, "player_child_launch: pipe() failed");
 
-   player_info.rseed = time(0);
-   srand(player_info.rseed);
+   switch (player.pid = fork()) {
+   case -1:
+      err(1, "player_child_launch: fork() failed");
+      break;
 
-   /* find the player backend */
-   found = false;
-   for (i = 0; i < PlayerBackendsSize && !found; i++) {
-      if (!strcasecmp(backend, PlayerBackends[i].name)) {
-         player = PlayerBackends[i];
-         found = true;
-      }
+   case 0:  /* child process */
+      if (close(0) == -1 || close(1) == -1 || close(2) == -1)
+         err(1, "player_child_launch: child close()'s failed(1)");
+
+      if (close(pwrite[1]) == -1 || close(pread[0]) == -1)
+         err(1, "player_child_launch: child close()'s failed(2)");
+
+      if (dup(pwrite[0]) == -1 || dup(pread[1]) == -1)
+         err(1, "player_child_launch: child dup()'s failed");
+
+      if (execv(player.program, player.pargs) == -1)
+         kill(getppid(), SIGCHLD);  /* send signal NOW! */
+
+      /*
+       * If reached here, mplayer failed.  Exit now.
+       * This is caught in vitunes.c signal handling.
+       */
+      exit(1);
+      break;
    }
 
-   if (!found) {
-      ui_destroy();
-      errx(1, "backend '%s' not supported", backend);
-   }
+   /* Back to the parent... */
 
-   if (player.dynamic) {
-      ui_destroy();
-      errx(1, "dynamically loaded backends not yet supported");
-   }
+   /* close unnecessary pipe ends */
+   if (close(pwrite[0]) == -1 || close(pread[1]) == -1)
+      err(1, "player_child_launch: parent close()'s failed");
 
-   player.set_callback_playnext(callback_playnext);
-   player.set_callback_notice(paint_message);
-   player.set_callback_error(paint_error);
-   player.set_callback_fatal(callback_fatal);
-   player.start();
+   /* setup player pipes */
+   player.pipe_read  = pread[0];
+   player.pipe_write = pwrite[1];
+
+   /* setup read pipe to media player as non-blocking */
+   if ((flags = fcntl(player.pipe_read, F_GETFL, 0)) == -1)
+      err(1, "player_child_launch: fcntl() failed to get current flags");
+
+   if (fcntl(player.pipe_read, F_SETFL, flags | O_NONBLOCK) == -1)
+      err(1, "player_child_launch: fcntl() failed to set pipe non-blocking");
 }
 
 void
-player_destroy()
+player_child_relaunch()
 {
-   player.finish();
+   int previous_position;
+   int status;
+
+   wait(&status);
+   player_child_launch();
+
+   /* restart playback where left-off */
+   if (player_status.playing && !player_status.paused) {
+      previous_position = player_status.position;
+      player_play();
+      player_seek(previous_position);
+   }
 }
+
+void
+player_child_kill()
+{
+   static const char *cmd = "\nquit\n";
+
+   player_send_cmd(cmd);
+
+   close(player.pipe_read);
+   close(player.pipe_write);
+   waitpid(player.pid, NULL, 0);
+
+   player_init(player.program, player.pargs, player.mode);
+}
+
+
+/*****************************************************************************
+ * player control functions (setting queue, playing, pausing, etc.)
+ ****************************************************************************/
 
 void
 player_set_queue(playlist *queue, int pos)
 {
-   player_info.queue = queue;
-   player_info.qidx  = pos;
+   player.queue = queue;
+   player.qidx  = pos;
+}
+
+void
+player_send_cmd(const char *cmd)
+{
+   write(player.pipe_write, cmd, strlen(cmd));
 }
 
 void
 player_play()
 {
-   if (player_info.queue == NULL)
+   static const char *cmd_fmt = "\nloadfile \"%s\" 0\nget_property time_pos\n";
+   char *cmd;
+
+   /* assert valid queue/qidx */
+   if (player.queue == NULL)
       errx(1, "player_play: bad queue/qidx");
 
-   if (player_info.qidx < 0 || player_info.qidx > player_info.queue->nfiles)
-      errx(1, "player_play: qidx %i out-of-range", player_info.qidx);
+   if (player.qidx < 0 || player.qidx > player.queue->nfiles)
+      errx(1, "player_play: qidx %i out-of-range", player.qidx);
 
-   player.play(player_info.queue->files[player_info.qidx]->filename);
+   /* build and send the command to the player */
+   asprintf(&cmd, cmd_fmt, player.queue->files[player.qidx]->filename);
+   if (cmd == NULL)
+      err(1, "player_play: asprintf failed");
 
+   player_send_cmd(cmd);
+   free(cmd);
+
+   /* update player status info */
+   player_status.playing = true;
+   player_status.paused = false;
+   player_status.position = 0;
 }
 
+/*
+ * Play the next song in the queue.  This will also stop playback if the mode
+ * is linear and the end of the playlist is reached.
+ */
+void
+player_play_next_song()
+{
+   switch (player.mode) {
+   case PLAYER_MODE_LINEAR:
+      if (++player.qidx == player.queue->nfiles) {
+         player.qidx = 0;
+         player_stop();
+      } else
+         player_play();
+
+      break;
+
+   case PLAYER_MODE_LOOP:
+      if (++player.qidx == player.queue->nfiles)
+         player.qidx = 0;
+
+      player_play();
+      break;
+
+   case PLAYER_MODE_RANDOM:
+      player.qidx = rand() % player.queue->nfiles;
+      player_play();
+      break;
+   }
+}
+
+/* cease playback */
 void
 player_stop()
 {
-   player.stop();
+   static const char *cmd = "\nstop\n";
+
+   player_send_cmd(cmd);
+
+   player_status.playing = false;
+   player_status.paused = false;
 }
 
+/* pause/unpause playback */
 void
 player_pause()
 {
-   if (!player.playing())
+   static const char *cmd = "\npause\n";
+
+   if (!player_status.playing)
       return;
 
-   player.pause();
+   player_send_cmd(cmd);
+   player_status.paused = !player_status.paused;
 }
 
+/* seek forward/backward in the currently playing file */
 void
 player_seek(int seconds)
 {
-   if (!player.playing())
+   static const char *cmd_fmt = "\nseek %i 0\nget_property time_pos\n";
+   char *cmd;
+
+   if (!player_status.playing)
       return;
 
-   player.seek(seconds);
+   asprintf(&cmd, cmd_fmt, seconds);
+   if (cmd == NULL)
+      err(1, "player_seek: asprintf failed");
+
+   player_send_cmd(cmd);
+   free(cmd);
+
+   if (player_status.paused)
+      player_status.paused = false;
 }
 
-/* TODO merge this with the player_play_prev_song into player_skip_song */
+/*****************************************************************************
+ * Player monitor function, called repeatedly via the signal handler in the
+ * vitunes main loop.
+ *
+ * This communicates with the child process periodically to accomplish the
+ * following:
+ *    1. If the player is currently playing a song, determine the position
+ *       (in seconds) into the playback
+ *    2. When the player finishes playing a song, it starts playing the next
+ *       song, according to the current playmode.
+ ****************************************************************************/
 void
-player_play_next_song(int skip)
+player_monitor()
 {
-   if (!player.playing())
+   static const char *query_cmd   = "\nget_property time_pos\n";
+   static const char *answer_fail = "ANS_ERROR=PROPERTY_UNAVAILABLE";
+   static const char *answer_good = "ANS_time_pos";
+   static char response[1000];  /* mplayer can be noisy */
+   char *s;
+   int   nbytes;
+
+   /* in this case, nothing to monitor */
+   if (!player_status.playing || player_status.paused)
       return;
 
-   switch (player_info.mode) {
-   case MODE_LINEAR:
-      player_info.qidx += skip;
-      if (player_info.qidx >= player_info.queue->nfiles) {
-         player_info.qidx = 0;
-         player_stop();
-      } else
-         player_play();
+   /* read any output from the player */
+   bzero(response, sizeof(response));
+   nbytes = read(player.pipe_read, &response, sizeof(response));
 
-      break;
+   if (nbytes == -1 && errno == EAGAIN)
+      return;
 
-   case MODE_LOOP:
-      player_info.qidx += skip;
-      if (player_info.qidx >= player_info.queue->nfiles)
-         player_info.qidx %= player_info.queue->nfiles;
+   response[nbytes + 1] = '\0';
 
-      player_play();
-      break;
-
-   case MODE_RANDOM:
-      player_info.qidx = rand() % player_info.queue->nfiles;
-      player_play();
-      break;
+   /* case: reached end of playback for a given file */
+   if (strstr(response, answer_fail) != NULL) {
+      player_play_next_song();
+      return;
    }
-}
 
-/* TODO (see comment for player_play_next_song) */
-void
-player_play_prev_song(int skip)
-{
-   if (!player.playing())
-      return;
+   /* case: continue in playing current file.  update position */
+   if ((s = strstr(response, answer_good)) != NULL) {
+      while (strstr(s + 1, answer_good) != NULL)
+         s = strstr(s + 1, answer_good);
 
-   switch (player_info.mode) {
-   case MODE_LINEAR:
-      player_info.qidx -= skip;
-      if (player_info.qidx < 0) {
-         player_info.qidx = 0;
-         player_stop();
-      } else
-         player_play();
+      if (sscanf(s, "ANS_time_pos=%f", &player_status.position) != 1)
+         errx(1, "player_monitor: player child is misbehaving.");
 
-      break;
-
-   case MODE_LOOP:
-      skip %= player_info.queue->nfiles;
-      if (skip <= player_info.qidx)
-         player_info.qidx -= skip;
-      else
-         player_info.qidx = player_info.queue->nfiles - (skip + player_info.qidx);
-
-      player_play();
-      break;
-
-   case MODE_RANDOM:
-      player_info.qidx = rand() % player_info.queue->nfiles;
-      player_play();
-      break;
    }
+
+   player_send_cmd(query_cmd);
 }
-
-/* TODO merge with above... wtf didn't i do it that way!? */
-void
-player_skip_song(int num)
-{
-   if (num >= 0)
-      player_play_next_song(num);
-   else
-      player_play_prev_song(num * -1);
-}
-
-void
-player_volume_step(float percent)
-{
-   if (!player.playing())
-      return;
-
-   player.volume_step(percent);
-}
-
-void
-player_monitor(void)
-{
-   player.monitor();
-}
-

@@ -24,7 +24,7 @@
 #include <pwd.h>
 #include <signal.h>
 #include <unistd.h>
-#include <stdio.h>
+#include <util.h>
 
 #include "debug.h"
 #include "enums.h"
@@ -44,13 +44,12 @@
 /* record keeping  */
 extern playlist   *viewing_playlist;
 extern playlist   *playing_playlist;
-extern int         visual_mode_start;
 
 /* signal flags referenced elsewhere */
 extern volatile sig_atomic_t VSIG_QUIT;
 
 /* other */
 void load_config();
-void process_signals();
+void process_signals(bool);
 
 #endif

@@ -179,16 +179,6 @@ playlist_file_replace(playlist *p, int index, meta_info *newEntry)
    p->files[index] = newEntry;
 }
 
-/* Used with bsearch to find playlist entry by filename. */
-static int cmp_fn_mi(const void *ai, const void *bi)
-{
-   const char  *a = (const char *) ai;
-   const meta_info **b2 = (const meta_info **) bi;
-   const meta_info *b = (const meta_info *) *b2;
-
-   return strcmp(a, b->filename);
-}
-
 /*
  * Loads a playlist from the provided filename.  The files within the playlist
  * are compared against the given meta-information-database to see if they
@@ -202,10 +192,11 @@ static int cmp_fn_mi(const void *ai, const void *bi)
 playlist *
 playlist_load(const char *filename, meta_info **db, int ndb)
 {
-   meta_info *mi, **mit;
+   meta_info *mi;
    FILE *fin;
    char *period;
    char  entry[PATH_MAX + 1];
+   int   idx;
 
    /* open file */
    if ((fin = fopen(filename, "r")) == NULL)
@@ -228,8 +219,11 @@ playlist_load(const char *filename, meta_info **db, int ndb)
       entry[strcspn(entry, "\n")] = '\0';
 
       /* check if file exists in the meta info. db */
-      mit = bsearch(entry, db, ndb, sizeof(meta_info *), cmp_fn_mi);
-      mi = *mit;
+      mi = NULL;
+      for (idx = 0; idx < ndb; idx++) {
+         if (strcmp(entry, db[idx]->filename) == 0)
+            mi = db[idx];
+      }
 
       if (mi != NULL)   /* file DOES exist in DB */
          playlist_files_append(p, &mi, 1, false);
@@ -346,15 +340,13 @@ retrieve_playlist_filenames(const char *dirname, char ***fnames)
    char   *glob_pattern;
    int     fcount;
    glob_t  files;
-   int     globbed;
 
    /* build the search pattern */
    if (asprintf(&glob_pattern, "%s/*.playlist", dirname) == -1)
       errx(1, "failed in building glob pattern");
 
    /* get the files */
-   globbed = glob(glob_pattern, 0, NULL, &files);
-   if (globbed != 0 && globbed != GLOB_NOMATCH && errno != 0)
+   if (glob(glob_pattern, 0, NULL, &files) != 0 && errno != 0)
       err(1, "failed to glob playlists directory");
 
    /* allocate & copy each of the filenames found into the filenames array */

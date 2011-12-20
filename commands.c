@@ -34,168 +34,15 @@ const cmd CommandPath[] = {
    {  "filter",   cmd_filter },
    {  "mode",     cmd_mode },
    {  "new",      cmd_new },
-   {  "playlist", cmd_playlist },
    {  "q",        cmd_quit },
    {  "reload",   cmd_reload },
    {  "set",      cmd_set },
    {  "sort",     cmd_sort },
    {  "unbind",   cmd_unbind },
-   {  "w",        cmd_write },
-   {  "toggle",   cmd_toggle }
+   {  "w",        cmd_write }
 };
 const int CommandPathSize = (sizeof(CommandPath) / sizeof(cmd));
 
-
-/****************************************************************************
- * Toggleset related stuff
- ***************************************************************************/
-
-toggle_list **toggleset;
-size_t        toggleset_size;
-
-void
-toggleset_init()
-{
-   const int max_size = 52;  /* since we only have registers a-z and A-Z */
-   if ((toggleset = calloc(max_size, sizeof(toggle_list*))) == NULL)
-      err(1, "%s: calloc(3) failed", __FUNCTION__);
-
-   toggleset_size = 0;
-}
-
-void
-toggleset_free()
-{
-   size_t i;
-   for (i = 0; i < toggleset_size; i++)
-      toggle_list_free(toggleset[i]);
-
-   free(toggleset);
-   toggleset_size = 0;
-}
-
-void
-toggle_list_add_command(toggle_list *t, char *cmd)
-{
-   char **new_cmds;
-   int    idx, new_size;
-
-   /* resize array */
-   if (t->size == 0) {
-      if ((t->commands = malloc(sizeof(char*))) == NULL)
-         err(1, "%s: malloc(3) failed", __FUNCTION__);
-
-      idx = 0;
-      t->size = 1;
-   } else {
-      new_size = (t->size + 1) * sizeof(char*);
-      if ((new_cmds = realloc(t->commands, new_size)) == NULL)
-         err(1, "%s: realloc(3) failed", __FUNCTION__);
-
-      idx = t->size;
-      t->commands = new_cmds;
-      t->size++;
-   }
-
-   /* add command */
-   if ((t->commands[idx] = strdup(cmd)) == NULL)
-      err(1, "%s: strdup(3) failed", __FUNCTION__);
-}
-
-toggle_list*
-toggle_list_create(int registr, int argc, char *argv[])
-{
-   toggle_list *t;
-   char *cmd = NULL;
-   int   i, j;
-
-   if ((t = malloc(sizeof(toggle_list))) == NULL)
-      err(1, "%s: malloc(3) failed", __FUNCTION__);
-
-   t->commands = NULL;
-   t->registr  = registr;
-   t->size     = 0;
-
-   /* parse the argv into the toggle list */
-   for (i = 0; i < argc; i++) {
-      if (!strcmp("/", argv[i]))
-         continue;
-
-      /* count number strings in this command and determine length */
-      for (j = i; j < argc && strcmp("/", argv[j]); j++)
-
-      /* now collapse them into a single string */
-      cmd = argv2str(j - i + 1, argv + i);
-      toggle_list_add_command(t, cmd);
-      free(cmd);
-
-      i += (j - i) - 1;
-   }
-
-   t->index = t->size - 1;
-   return t;
-}
-
-void
-toggle_list_free(toggle_list *t)
-{
-   size_t i;
-
-   for (i = 0; i < t->size; i++)
-      free(t->commands[i]);
-
-   free(t);
-}
-
-void
-toggle_add(toggle_list *t)
-{
-   if (toggle_get(t->registr) != NULL)
-      toggle_remove(t->registr);
-
-   toggleset[toggleset_size++] = t;
-}
-
-void
-toggle_remove(int registr)
-{
-   size_t i, idx;
-   bool   found;
-
-   found = false;
-   idx = 0;
-   for (i = 0; i < toggleset_size; i++) {
-      if (toggleset[i]->registr == registr) {
-         idx = i;
-         found = true;
-      }
-   }
-
-   if (!found) return;
-
-   for (i = idx; i < toggleset_size - 1; i++)
-      toggleset[i] = toggleset[i + 1];
-
-   toggleset_size--;
-}
-
-toggle_list*
-toggle_get(int registr)
-{
-   size_t i;
-
-   for (i = 0; i < toggleset_size; i++) {
-      if (toggleset[i]->registr == registr)
-         return toggleset[i];
-   }
-
-   return NULL;
-}
-
-
-/****************************************************************************
- * Misc handy functions
- ***************************************************************************/
 
 void
 setup_viewing_playlist(playlist *p)
@@ -231,11 +78,6 @@ str2bool(const char *s, bool *b)
 
    return -1;
 }
-
-
-/****************************************************************************
- * Command handlers
- ***************************************************************************/
 
 int
 cmd_quit(int argc, char *argv[])
@@ -366,11 +208,11 @@ cmd_mode(int argc, char *argv[])
    }
 
    if (strcasecmp(argv[1], "linear") == 0)
-      player_info.mode = MODE_LINEAR;
+      player.mode = PLAYER_MODE_LINEAR;
    else if (strcasecmp(argv[1], "loop") == 0)
-      player_info.mode = MODE_LOOP;
+      player.mode = PLAYER_MODE_LOOP;
    else if (strcasecmp(argv[1], "random") == 0)
-      player_info.mode = MODE_RANDOM;
+      player.mode = PLAYER_MODE_RANDOM;
    else {
       paint_error("invalid mode \"%s\".  must be one of: linear, loop, or random", argv[1]);
       return 2;
@@ -496,9 +338,6 @@ cmd_sort(int argc, char *argv[])
    qsort(viewing_playlist->files, viewing_playlist->nfiles,
       sizeof(meta_info*), mi_compare);
 
-   if(!ui_is_init())
-      return 0;
-
    /* redraw */
    paint_playlist();
 
@@ -541,9 +380,7 @@ cmd_display(int argc, char *argv[])
       return 1;
    }
 
-   if(ui_is_init())
-      paint_playlist();
-
+   paint_playlist();
    return 0;
 }
 
@@ -581,12 +418,12 @@ cmd_color(int argc, char *argv[])
       return 4;
    }
 
-   if ((i_fg = paint_str2color(fg)) == -2) {
+   if ((i_fg = paint_str2color(fg)) < 0) {
       paint_error("invalid foreground color '%s'", fg);
       return 5;
    }
 
-   if ((i_bg = paint_str2color(bg)) == -2) {
+   if ((i_bg = paint_str2color(bg)) < 0) {
       paint_error("invalid background color '%s'", bg);
       return 6;
    }
@@ -601,10 +438,8 @@ cmd_color(int argc, char *argv[])
    }
 
    /* redraw */
-   if (ui_is_init()) {
-      ui_clear();
-      paint_all();
-   }
+   ui_clear();
+   paint_all();
 
    return 0;
 }
@@ -649,10 +484,8 @@ cmd_set(int argc, char *argv[])
       /* redraw */
       ui.lwidth = new_width;
       ui_resize();
-      if(ui_is_init()) {
-         ui_clear();
-         paint_all();
-      }
+      ui_clear();
+      paint_all();
 
    } else if (strcasecmp(property, "lhide") == 0) {
       if (str2bool(value, &tf) < 0) {
@@ -813,7 +646,6 @@ cmd_unbind(int argc, char *argv[])
       }
 
       kb_unbind_key(key);
-      return 0;
    }
 
    /* unbind key case, with control ("unbind key control X") */
@@ -824,122 +656,10 @@ cmd_unbind(int argc, char *argv[])
       }
 
       kb_unbind_key(key);
-      return 0;
    }
 
    paint_error("usage: unbind [* | action <ACTION> | key <KEYCODE> ]");
    return 1;
-}
-
-int
-cmd_toggle(int argc, char *argv[])
-{
-   toggle_list *t;
-   char **cmd_argv;
-   int    cmd_argc;
-   int    registr;
-
-   if (argc < 3) {
-      paint_error("usage: %s <register> <action1> / ...", argv[0]);
-      return 1;
-   }
-
-   if (strlen(argv[1]) != 1) {
-      paint_error("error: register name must be a single letter (in [a-zA-Z])");
-      return 1;
-   }
-
-   registr = *(argv[1]);
-
-   if (!( ('a' <= registr && registr <= 'z')
-   ||     ('A' <= registr && registr <= 'Z'))) {
-      paint_error("error: invalid register name.  Must be one of [a-zA-Z]");
-      return 1;
-   }
-
-   cmd_argc = argc - 2;
-   cmd_argv = argv + 2;
-   t = toggle_list_create(registr, cmd_argc, cmd_argv);
-   toggle_add(t);
-   return 0;
-}
-
-int
-cmd_playlist(int argc, char *argv[])
-{
-   int x;
-   int idx = -1;
-
-   if (argc != 2) {
-      paint_error("usage: playlist <list-name>");
-      return 1;
-   }
-
-   for(x = 0; x < mdb.nplaylists; x++) {
-      if(!strncmp(argv[1], mdb.playlists[x]->name, strlen(argv[1]))) {
-         if(idx > -1) {
-            idx = -2;
-            break;
-         }
-
-         if(idx == -1)
-            idx = x;
-      }
-   }
-
-   if(idx > -1) {
-      setup_viewing_playlist(mdb.playlists[idx]);
-      ui.active = ui.playlist;
-      paint_all();
-      paint_message("jumped to playlist: %s", mdb.playlists[idx]->name);
-      return 0;
-   }
-
-   if(idx == -1) {
-      paint_error("no match for: %s", argv[1]);
-      return 0;
-   }
-
-   if(idx == -2)
-      paint_error("no unique match for: %s", argv[1]);
-
-   return 0;
-}
-
-void
-cmd_execute(char *cmd)
-{
-   const char *errmsg = NULL;
-   bool   found;
-   char **argv;
-   int    argc;
-   int    found_idx = 0;
-   int    num_matches;
-   int    i;
-
-   if (str2argv(cmd, &argc, &argv, &errmsg) != 0) {
-      paint_error("parse error: %s in '%s'", errmsg, cmd);
-      return;
-   }
-
-   found = false;
-   num_matches = 0;
-   for (i = 0; i < CommandPathSize; i++) {
-      if (match_command_name(argv[0], CommandPath[i].name)) {
-         found = true;
-         found_idx = i;
-         num_matches++;
-      }
-   }
-
-   if (found && num_matches == 1)
-      (CommandPath[found_idx].func)(argc, argv);
-   else if (num_matches > 1)
-      paint_error("Ambiguous abbreviation '%s'", argv[0]);
-   else
-      paint_error("Unknown commands '%s'", argv[0]);
-
-   argv_free(&argc, &argv);
 }
 
 
@@ -985,7 +705,7 @@ user_getstr(const char *prompt, char **response)
        * not show anywhere outside of the command window.
        */
       curs_set(0);
-      process_signals();
+      process_signals(false);
       curs_set(1);
       wmove(ui.command, 0, strlen(prompt) + pos);
       wrefresh(ui.command);
@@ -1005,13 +725,9 @@ user_getstr(const char *prompt, char **response)
       /* handle 'backspace' / left-arrow, etc. */
       if (ch == 127    || ch == KEY_BACKSPACE || ch == KEY_LEFT
        || ch == KEY_DC || ch == KEY_SDC) {
-         if (pos == 0) {
-            if (ch == KEY_BACKSPACE) {
-               ret = 1;
-               goto end;
-            }
+         if (pos == 0)
             beep();
-         } else {
+         else {
             mvwaddch(ui.command, 0, strlen(prompt) + pos - 1, ' ');
             wmove(ui.command, 0, strlen(prompt) + pos - 1);
             wrefresh(ui.command);
@@ -1029,12 +745,6 @@ user_getstr(const char *prompt, char **response)
       /* see todo above - realloc input buffer here if position reaches max */
       if (pos >= MAX_INPUT_SIZE)
          errx(1, "user_getstr: shamefull limit reached");
-   }
-
-   /* For lack of input, bail out */
-   if (pos == 0) {
-      ret = 1;
-      goto end;
    }
 
    /* NULL-terminate and trim off trailing whitespace */

@@ -1,5 +1,3 @@
-# Makefile for [Open|Free|Net]BSD and Mac OS X
-
 # install locations
 PREFIX?=/usr/local
 BINDIR=$(PREFIX)/bin
@@ -10,21 +8,18 @@ CDEPS=`taglib-config --cflags`
 LDEPS=`taglib-config --libs` -ltag_c
 
 # build info
-CC?=/usr/bin/cc
+CC?=/usr/bin/gcc
 CFLAGS+=-c -std=c89 -Wall -Wextra -Wno-unused-value $(CDEPS) $(CDEBUG)
-LDFLAGS+=-lm -lncursesw -lutil $(LDEPS)
+LDFLAGS+=-lm -lncurses -lutil $(LDEPS)
 
 OBJS=commands.o compat.o e_commands.o \
 	  keybindings.o medialib.o meta_info.o \
-	  mplayer.o paint.o player.o player_utils.o \
-	  playlist.o socket.o str2argv.o \
-	  uinterface.o vitunes.o
-
-.PATH: players
+	  paint.o player.o playlist.o \
+	  str2argv.o uinterface.o vitunes.o
 
 # main targets
 
-.PHONY: debug clean install uninstall publish-repos man-debug linux
+.PHONY: debug clean install uninstall publish-repos man-debug
 
 vitunes: $(OBJS)
 	$(CC) -o $@ $(LDFLAGS) $(OBJS)
@@ -38,6 +33,8 @@ debug:
 clean:
 	rm -f *.o
 	rm -f vitunes vitunes.core vitunes-debug.log
+	rm -f test_str2argv
+
 
 install: vitunes
 	/usr/bin/install -c -m 0555 vitunes $(BINDIR)
@@ -49,9 +46,6 @@ uninstall:
 
 # misc.
 
-linux:
-	make -f Makefile.linux
-
 man-debug:
 	mandoc -Wall vitunes.1 > /dev/null
 
@@ -62,4 +56,9 @@ publish-repos:
 	hg push $(myhg)/vitunes
 	hg push $(mybb)/vitunes
 	hg push $(mygit)/vitunes
+
+# test program for str2argv
+test_str2argv:	str2argv.h str2argv.c
+	$(CC) $(CFLAGS) -Dstr2argv_test_main=main -o test_str2argv.o str2argv.c
+	$(CC) $(LDFLAGS) -o $@ test_str2argv.o
 
