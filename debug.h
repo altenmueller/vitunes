@@ -26,7 +26,7 @@ extern FILE *debug_log;
 
 /* debug file logger that goes to the file opened in vitunes.c */
 #define DFLOG(format, args...) \
-   fprintf(debug_log, "%s.%d: ", __FILE__, __LINE__); \
+   fprintf(debug_log, "%s.%d (%s): ", __FILE__, __LINE__, __FUNCTION__); \
    fprintf(debug_log, format, ## args); \
    fprintf(debug_log, "\n"); \
    fflush(debug_log);
@@ -49,7 +49,7 @@ extern FILE *debug_log;
 
 /* for unused arguments */
 #if defined(__GNUC__) || defined(__clang__)
-#  define UNUSED  __attribute((__unused__))
+#  define UNUSED  __attribute__((__unused__))
 #else
 #  define UNUSED
 #endif

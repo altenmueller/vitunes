@@ -23,7 +23,7 @@
 .Op Fl d Ar database-file
 .Op Fl e Ar command Op argument ...
 .Op Fl f Ar config-file
-.Op Fl m Ar media-player
+.Op Fl m Ar media-backend
 .Op Fl p Ar playlist-dir
 .Sh DESCRIPTION
 .Nm
@@ -57,6 +57,10 @@ uses.
 See the section below titled
 .Sx E-COMMANDS
 for more information.
+.It Fl c Ar command
+Execute a command in the running
+.Nm
+instance.
 .It Fl f Ar config-file
 Specifies the path of the configuration file
 .Nm
@@ -67,14 +71,27 @@ for information on what the configuration may contain.
 .Pp
 The default location is
 .Pa ~/.vitunes/vitunes.conf .
-.It Fl m Ar media-player-path
-Specifies the path to the media player to use.
-Currently only
+.It Fl m Ar media-backend
+Specify the media backend to use for playback.  The current list of supported
+media backends are:
+.Bl -tag -width "mplayer"
+.It Cm mplayer
+Uses a
+.Xr fork 2
+/
+.Xr execvp 3 'd
+instance of
 .Xr mplayer 1
-is supported.
+for all playback.  Note that the mplayer binary
+.Sy must
+be in your
+.Ev PATH
+environment variable.
+.El
 .Pp
-The default location is
-.Pa /usr/local/bin/mplayer .
+Currently only
+.Cm mplayer
+is supported.
 .It Fl p Ar playlist-dir
 Specifies the directory containing all of the playlists
 .Nm
@@ -147,7 +164,8 @@ The filter buffer is where the results of every
 .Pf : Ic filter Ar ...
 command are temporarily stored.
 .br
-Playlists with unsaved changes appear bold.
+Playlists with unsaved changes appear bold and have their name preceded with
+a '+'.
 .It playlist
 This window is to the right of the library window and occupies most of the
 display.
@@ -306,6 +324,8 @@ The tildas in empty rows of the playlist window.
 Currently playing playlist in the library window.
 .It Cm playing-playlist
 Currently playing file in the playlist window.
+.It Cm current-inactive
+Current row in the inactive window.
 .It Cm artist
 The artist column in the playlist window.
 .It Cm album
@@ -328,7 +348,9 @@ Available colors for
 .Ar fg
 and
 .Ar bg
-are: white, black, red, green, yellow, blue, magenta, and cyan.
+are: white, black, red, green, yellow, blue, magenta, cyan, and default.
+The color default is whatever the terminal uses as the default foreground
+or background color.
 .It Pf : Ic display Pq Cm reset | Cm show | Ar display-description
 The display command is used to change which columns are displayed in the
 playlist window, their order, their width, and their alignment.
@@ -549,6 +571,12 @@ is provided, then the playlist will be saved with this new name.
 If, however, a playlist already exists with that name, then you will be
 prevented from saving with that name unless '!' is provided, in which case
 the existing playlist with that name will be deleted.
+.It Pf : Ic toggle Op Ar commands
+Set the commands list to
+.Ar commands.
+The commands are seperated by a /. Triggering the toggle action executes
+the command at the current list index and increases the index. So by
+executing the commands, you cycle through the list.
 .El
 .Sh SPECIFYING KEYCODES
 This section describes how to specify keycodes used in both the
@@ -608,7 +636,7 @@ Some examples of using keycodes and the
 run-time command are:
 .Bd -literal
    bind  paste_after   p
-   bind  paste_bofore  P
+   bind  paste_before  P
 
    bind  scroll_up_halfpage    Control u
    bind  scroll_down_halfpage  Control d
@@ -707,6 +735,16 @@ current window's buffer.
 .br
 DEFAULT BINDINGS:
 .Cm %
+.It Cm go
+Go to a specific location within the current window.  This is planned to be
+similar to
+.Xr vim 1 's
+use of the 'g' keybinding, with multiple suffixes.  For now, only 'gg' is
+supported, and this takes you to the first line in the current window's
+buffer.
+.br
+DEFAULT BINDINGS:
+.Cm g
 .It Cm search_forward
 Begin a search for the entered string searching forward in the current window.
 The current row will be updated to the next matching row.
@@ -740,6 +778,14 @@ cut/deleted at a time, and that this action cannot be undone.
 .br
 DEFAULT BINDINGS:
 .Cm d
+.It Cm visual
+Begin visual mode.  This is only available in the playlist window, and once
+begun, only keybindings that move the cursor within the current window are
+allowed.  Visual mode is exited when either a yank or delete operation has
+been performed, or when the Escape key is pressed.
+.br
+DEFAULT BINDINGS:
+.Cm v, V
 .It Cm yank
 Copy the following N lines from the current window into the copy buffer, where
 N is the global input number.
@@ -854,13 +900,45 @@ Seek backwards 1 minute in any playing media.
 .br
 DEFAULT BINDINGS:
 .Cm B, \&{
+.It Cm media_next
+Play the next song in the playlist.
+.br
+DEFAULT BINDINGS:
+.Cm \&)
+.It Cm media_prev
+Play the previous song in the playlist.
+.br
+DEFAULT BINDINGS:
+.Cm \&(
+.It Cm volume_decrease
+Decrease the volume.
+.br
+DEFAULT BINDINGS:
+.Cm <
+.It Cm volume_increase
+Increase the volume.
+.br
+DEFAULT BINDINGS:
+.Cm >
+.It Cm toggle_forward
+Execute the next command from the toggle list specified by the provided
+register.
+.br
+DEFAULT BINDINGS:
+.Cm t
+.It Cm toggle_backward
+Execute the previous command from the toggle list specified by the provided
+register.
+.br
+DEFAULT BINDINGS:
+.Cm T
 .El
 .Pp
 Some examples of using the above actions and keycodes to define the default
 keybdings are:
 .Bd -literal
    bind  paste_after   p
-   bind  paste_bofore  P
+   bind  paste_before  P
 
    bind  scroll_up_halfpage    Control u
    bind  scroll_down_halfpage  Control d

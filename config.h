@@ -24,10 +24,8 @@
 
 /* System indenpendent stuff.  Shouldn't be altered. */
 const int DEFAULT_LIBRARY_WINDOW_WIDTH = 18;
-playmode DEFAULT_PLAYER_MODE = PLAYER_MODE_LOOP;
 
-/* Porters look here... */
-char *DEFAULT_PLAYER_PATH = "/usr/local/bin/mplayer";
-char *DEFAULT_PLAYER_ARGS[] = { "mplayer", "-slave", "-idle", "-quiet", "-msglevel", "cplayer=0:ao=0:vo=0:decaudio=0:decvideo=0:demuxer=0", NULL };
+playmode DEFAULT_PLAYER_MODE = MODE_LOOP;
+const char *DEFAULT_PLAYER_BACKEND = "mplayer";
 
 #endif

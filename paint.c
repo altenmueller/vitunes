@@ -141,7 +141,7 @@ paint_player()
    getmaxyx(stdscr, h, w);
 
    /* if nothing's playing, a shameless plug */
-   if (!player_status.playing) {
+   if (!player.playing()) {
       werase(ui.player);
       wattron(ui.player, COLOR_PAIR(colors.player));
       mvwprintw(ui.player, 0, 0, num2fmt(w, LEFT), "vitunes...");
@@ -151,32 +151,32 @@ paint_player()
    }
 
    /* determine time into current selection */
-   in_hour   = (int)  roundf(player_status.position / 3600);
-   in_minute = ((int) roundf(player_status.position)) % 3600 / 60;
-   in_second = ((int) roundf(player_status.position)) % 60;
+   in_hour   = (int)  roundf(player.position() / 3600);
+   in_minute = ((int) roundf(player.position())) % 3600 / 60;
+   in_second = ((int) roundf(player.position())) % 60;
 
    /* determine percent time into current selection */
    percent = -1;
-   if (playing_playlist->files[player.qidx]->length > 0) {
-      whole = playing_playlist->files[player.qidx]->length;
-      percent = roundf(100.0 * player_status.position / whole);
+   if (playing_playlist->files[player_info.qidx]->length > 0) {
+      whole = playing_playlist->files[player_info.qidx]->length;
+      percent = roundf(100.0 * player.position() / whole);
    }
 
    /* get character for playmode */
-   switch (player.mode) {
-      case PLAYER_MODE_LINEAR:
+   switch (player_info.mode) {
+      case MODE_LINEAR:
          playmode = "-";
          break;
-      case PLAYER_MODE_LOOP:
+      case MODE_LOOP:
          playmode = "O";
          break;
-      case PLAYER_MODE_RANDOM:
+      case MODE_RANDOM:
          playmode = "?";
          break;
    }
 
    /* determine info about song to show */
-   finfo = player_get_field2show(playing_playlist->files[player.qidx]);
+   finfo = player_get_field2show(playing_playlist->files[player_info.qidx]);
 
    /* draw */
    werase(ui.player);
@@ -185,7 +185,7 @@ paint_player()
    mvwprintw(ui.player, 0, 0,
       "[%s] %8.8s +%2.2d:%2.2d:%2.2d (%d%%) %-49.49s",
       playmode,
-      (player_status.paused ? "-PAUSED-" : ""),
+      (player.paused() ? "-PAUSED-" : ""),
       in_hour, in_minute, in_second,
       percent,
       finfo);
@@ -198,7 +198,7 @@ void
 paint_library()
 {
    char *str;
-   int   row, hoff, index;
+   int   row, hoff, index, x;
 
    /* if library window is hidden, nothing to do */
    if (ui.library->cwin == NULL) return;
@@ -209,16 +209,24 @@ paint_library()
    for (row = 0; row < ui.library->h; row++) {
 
       index = ui.library->voffset + row;
+      x = 0;
 
       /* apply attributes */
       if (index < mdb.nplaylists && mdb.playlists[index] == playing_playlist)
          wattron(ui.library->cwin, COLOR_PAIR(colors.playing_library));
 
-      if (index < mdb.nplaylists && mdb.playlists[index]->needs_saving)
+      if (index < mdb.nplaylists && mdb.playlists[index]->needs_saving) {
          wattron(ui.library->cwin, A_BOLD);
+         mvwprintw(ui.library->cwin, row, 0, "+");
+         x = 1;
+      }
 
-      if (row == ui.library->crow)
-         wattron(ui.library->cwin, A_REVERSE);
+      if (row == ui.library->crow) {
+         if (ui.active == ui.library)
+            wattron(ui.library->cwin, A_REVERSE);
+         else
+            wattron(ui.library->cwin, COLOR_PAIR(colors.current_inactive));
+      }
 
       if (index >= mdb.nplaylists)
          wattron(ui.library->cwin, COLOR_PAIR(colors.tildas_library));
@@ -234,7 +242,7 @@ paint_library()
             hoff = strlen(str);
 
          /* draw it */
-         mvwprintw(ui.library->cwin, row, 0,
+         mvwprintw(ui.library->cwin, row, x,
             num2fmt(ui.library->w, LEFT),
             str + hoff);
       }
@@ -246,7 +254,11 @@ paint_library()
       }
 
       if (row == ui.library->crow) {
-         wattroff(ui.library->cwin, A_REVERSE);
+         if (ui.active == ui.library)
+            wattroff(ui.library->cwin, A_REVERSE);
+         else
+            wattroff(ui.library->cwin, COLOR_PAIR(colors.current_inactive));
+
          wattron(ui.library->cwin, COLOR_PAIR(colors.library));
       }
 
@@ -271,6 +283,7 @@ paint_playlist()
 {
    playlist   *plist;
    bool        hasinfo;
+   bool        visual;
    char       *str;
    int         findex, row, col, colwidth;
    int         xoff, hoff, strhoff;
@@ -287,14 +300,26 @@ paint_playlist()
       /* get index of file to show */
       findex = row + ui.playlist->voffset;
 
+      /* determine if visual mode row */
+      visual = false;
+      if (visual_mode_start != -1 && ui.active == ui.playlist) {
+         if (visual_mode_start <= findex && findex <= ui.active->voffset + ui.active->crow)
+            visual = true;
+         if (ui.active->voffset + ui.active->crow <= findex && findex <= visual_mode_start)
+            visual = true;
+      }
+
       /* apply row attributes */
        wattron(ui.playlist->cwin, COLOR_PAIR(colors.playlist));
 
-      if (plist == playing_playlist && findex == player.qidx)
+      if (plist == playing_playlist && findex == player_info.qidx)
          wattron(ui.playlist->cwin, COLOR_PAIR(colors.playing_playlist));
 
-      if (row == ui.playlist->crow)
+      if ((row == ui.playlist->crow && ui.active == ui.playlist) || visual)
          wattron(ui.playlist->cwin, A_REVERSE);
+
+      if (row == ui.playlist->crow && ui.active != ui.playlist)
+         wattron(ui.playlist->cwin, COLOR_PAIR(colors.current_inactive));
 
       if (findex >= plist->nfiles)
          wattron(ui.playlist->cwin, COLOR_PAIR(colors.tildas_playlist));
@@ -361,7 +386,7 @@ paint_playlist()
 
                /* apply column attribute (only if file is NOT playing) */
                cattr = COLOR_PAIR(colors.cinfos[mi_display.order[col]]);
-               if ((plist != playing_playlist || findex != player.qidx)
+               if ((plist != playing_playlist || findex != player_info.qidx)
                && colors.cinfos_set[mi_display.order[col]])
                   wattron(ui.playlist->cwin, cattr);
 
@@ -376,7 +401,7 @@ paint_playlist()
                   (str == NULL ? " " : str + strhoff));
 
                /* un-apply column attribute */
-               if ((plist != playing_playlist || findex != player.qidx)
+               if ((plist != playing_playlist || findex != player_info.qidx)
                && colors.cinfos_set[mi_display.order[col]]) {
                   wattroff(ui.playlist->cwin, cattr);
                   wattron(ui.playlist->cwin, COLOR_PAIR(colors.playlist));
@@ -392,10 +417,13 @@ paint_playlist()
       if (findex >= plist->nfiles)
          wattroff(ui.playlist->cwin, COLOR_PAIR(colors.tildas_playlist));
 
-      if (row == ui.playlist->crow)
+      if ((row == ui.playlist->crow && ui.active == ui.playlist) || visual)
          wattroff(ui.playlist->cwin, A_REVERSE);
 
-      if (plist == playing_playlist && findex == player.qidx)
+      if (row == ui.playlist->crow && ui.active != ui.playlist)
+         wattroff(ui.playlist->cwin, COLOR_PAIR(colors.current_inactive));
+
+      if (plist == playing_playlist && findex == player_info.qidx)
          wattroff(ui.playlist->cwin, COLOR_PAIR(colors.playing_playlist));
 
       wattroff(ui.playlist->cwin, COLOR_PAIR(colors.playlist));
@@ -547,23 +575,26 @@ paint_setup_colors()
    colors.tildas_playlist  = 9;
    colors.playing_library  = 10;
    colors.playing_playlist = 11;
+   colors.current_inactive = 12;
 
    /* setup default colors */
-   init_pair(colors.bars,     COLOR_WHITE, COLOR_BLACK);
-   init_pair(colors.player,   COLOR_GREEN, COLOR_BLACK);
-   init_pair(colors.status,   COLOR_WHITE, COLOR_BLACK);
-   init_pair(colors.library,  COLOR_WHITE, COLOR_BLACK);
-   init_pair(colors.playlist, COLOR_WHITE, COLOR_BLACK);
-   init_pair(colors.errors,   COLOR_WHITE, COLOR_RED);
-   init_pair(colors.messages, COLOR_RED,   COLOR_BLACK);
-   init_pair(colors.tildas_library,   COLOR_BLUE, COLOR_BLACK);
-   init_pair(colors.tildas_playlist,  COLOR_BLUE, COLOR_BLACK);
-   init_pair(colors.playing_library,  COLOR_GREEN, COLOR_BLACK);
-   init_pair(colors.playing_playlist, COLOR_GREEN, COLOR_BLACK);
+   use_default_colors();
+   init_pair(colors.bars,     -1, -1);
+   init_pair(colors.player,   COLOR_GREEN, -1);
+   init_pair(colors.status,   -1, -1);
+   init_pair(colors.library,  -1, -1);
+   init_pair(colors.playlist, -1, -1);
+   init_pair(colors.errors,   -1, COLOR_RED);
+   init_pair(colors.messages, COLOR_RED,   -1);
+   init_pair(colors.tildas_library,   COLOR_BLUE, -1);
+   init_pair(colors.tildas_playlist,  COLOR_BLUE, -1);
+   init_pair(colors.playing_library,  COLOR_GREEN, -1);
+   init_pair(colors.playing_playlist, COLOR_GREEN, -1);
+   init_pair(colors.current_inactive, -1, -1);
 
    /* colors for cinfo fields (columns in playlist window) */
    for (i = 0; i < MI_NUM_CINFO; i++) {
-      colors.cinfos[i] = 12 + i;
+      colors.cinfos[i] = 13 + i;
       colors.cinfos_set[i] = false;
    }
 }
@@ -595,6 +626,8 @@ paint_str2item(const char *str)
       return colors.playing_library;
    else if (strcasecmp(str, "playing-playlist") == 0)
       return colors.playing_playlist;
+   else if (strcasecmp(str, "current-inactive") == 0)
+      return colors.current_inactive;
 
    /* if reached here, check cinfo's array */
    for (i = 0; i < MI_NUM_CINFO; i++) {
@@ -624,6 +657,8 @@ paint_str2color(const char *str)
       return COLOR_CYAN;
    else if (strcasecmp(str, "white") == 0)
       return COLOR_WHITE;
-   else
+   else if (strcasecmp(str, "default") == 0)
       return -1;
+   else
+      return -2;
 }

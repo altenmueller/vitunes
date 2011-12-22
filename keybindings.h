@@ -56,6 +56,7 @@ typedef enum {
    find_next_forward,
    find_next_backward,
    /* copy/cut/paste & undo/redo */
+   visual,
    cut,
    yank,
    paste_after,
@@ -63,6 +64,7 @@ typedef enum {
    undo,
    redo,
    /* misc. */
+   go,
    quit,
    redraw,
    command_mode,
@@ -72,13 +74,18 @@ typedef enum {
    show_file_info,
    load_playlist,
    media_play,
-   media_next,
    media_pause,
    media_stop,
+   media_next,
+   media_prev,
+   volume_increase,
+   volume_decrease,
    seek_forward_seconds,
    seek_backward_seconds,
    seek_forward_minutes,
-   seek_backward_minutes
+   seek_backward_minutes,
+   toggle_forward,
+   toggle_backward
 } KeyAction;
 
 typedef int KeyCode;
@@ -92,8 +99,9 @@ void kb_unbind_action(KeyAction);
 void kb_unbind_key(KeyCode);
 void kb_unbind_all();
 bool kb_execute(KeyCode);
+bool kb_execute_by_name(const char *);
 
-bool    kb_str2action(char*, KeyAction*);
+bool    kb_str2action(const char*, KeyAction*);
 KeyCode kb_str2keycode(char*);
 KeyCode kb_str2keycode2(char*, char*);
 
@@ -123,6 +131,7 @@ void kba_jumpto_file(KbaArgs a);
 void kba_search(KbaArgs a);
 void kba_search_find(KbaArgs a);
 
+void kba_visual(KbaArgs a);
 void kba_cut(KbaArgs a);
 void kba_yank(KbaArgs a);
 void kba_paste(KbaArgs a);
@@ -130,6 +139,7 @@ void kba_undo(KbaArgs a);
 void kba_redo(KbaArgs a);
 
 void kba_command_mode(KbaArgs a);
+void kba_go(KbaArgs a);
 void kba_shell(KbaArgs a);
 void kba_quit(KbaArgs a);
 void kba_redraw(KbaArgs a); 
@@ -138,10 +148,13 @@ void kba_switch_windows(KbaArgs a);
 void kba_show_file_info(KbaArgs a);
 void kba_load_playlist(KbaArgs a);
 void kba_play(KbaArgs a);
-void kba_next(KbaArgs a);
 void kba_pause(KbaArgs a);
 void kba_stop(KbaArgs a);
+void kba_play_next(KbaArgs a);
+void kba_play_prev(KbaArgs a);
+void kba_volume(KbaArgs a);
 void kba_seek(KbaArgs a);
+void kba_toggle(KbaArgs a);
 
 
 /*
