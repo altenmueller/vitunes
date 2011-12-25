@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <util.h>
 #include "vitunes.h"
 #include "config.h"     /* NOTE: must be after vitunes.h */
 #include "socket.h"
