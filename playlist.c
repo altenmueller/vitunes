@@ -214,7 +214,7 @@ playlist_load(const char *filename, meta_info **db, int ndb)
    /* create playlist and setup */
    playlist *p = playlist_new();
    p->filename = strdup(filename);
-   p->name     = strdup(basename(filename));
+   p->name     = strdup(basename((char *)filename));
    if (p->filename == NULL || p->name == NULL)
       err(1, "playlist_load: failed to allocate info for playlist '%s'", filename);
 
@@ -344,7 +344,7 @@ int
 retrieve_playlist_filenames(const char *dirname, char ***fnames)
 {
    char   *glob_pattern;
-   int     fcount;
+   unsigned int     fcount;
    glob_t  files;
    int     globbed;
 
