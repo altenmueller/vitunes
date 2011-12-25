@@ -1,4 +1,8 @@
 This is a fork of vitunes. Just a few minor tweaks that made this a little
 more useful for me. Basically I added external input functionality so I
 could control vitunes from other applications, and I modified the makefile
-so it would compile properly on Mac OS X.
+so it would compile properly on Mac OS X and Linux.
+
+Summary of bugs fixed (from original upstream version):
+   - memory leak fixed in str2argv
+   - memory leak fixed in playlist_free
