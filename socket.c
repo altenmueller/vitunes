@@ -61,20 +61,14 @@ sock_listen(void)
    unlink(VITUNES_SOCK);
 
    if((ret = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
-   {
-      fputs("Couldn't create socket.\n", stderr);
       return -1;
-   }
 
    addr.sun_family = AF_UNIX;
    strcpy(addr.sun_path, VITUNES_SOCK);
    addr_len = sizeof(addr.sun_family) + strlen(VITUNES_SOCK) + 1;
 
    if(bind(ret, (struct sockaddr *) &addr, addr_len) == -1)
-   {
-      fputs("Couldn't bind.\n", stderr);
       return -1;
-   }
 
    fcntl(ret, F_SETFD, FD_CLOEXEC, &coe);
 
