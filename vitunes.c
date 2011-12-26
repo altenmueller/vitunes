@@ -234,6 +234,8 @@ main(int argc, char *argv[])
    ybuffer_free();
    toggleset_free();
 
+   sock_remove(sock);
+
    /* do we have any odd cause for quitting? */
    if (QUIT_CAUSE != EXIT_NORMAL) {
       switch (QUIT_CAUSE) {
