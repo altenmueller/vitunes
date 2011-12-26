@@ -6,3 +6,4 @@ so it would compile properly on Mac OS X and Linux.
 Summary of bugs fixed (from original upstream version):
    - memory leak fixed in str2argv
    - memory leak fixed in playlist_free
+   - closed and unlinked socket when exiting
