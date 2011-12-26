@@ -44,4 +44,7 @@ ssize_t sock_recv_msg(int sock, char *msg, size_t msg_len);
  */
 void sock_recv_and_exec(int sock);
 
+/* Close the socket and delete the link from /tmp */
+void sock_remove(int sock);
+
 #endif /* __SOCKET_H */

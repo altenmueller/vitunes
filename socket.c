@@ -106,3 +106,12 @@ sock_recv_and_exec(int sock)
    if(!kb_execute_by_name(msg))
       cmd_execute(msg);
 }
+
+void
+sock_remove(int sock)
+{
+   if ( sock != -1 ) {
+      close( sock );
+      unlink( VITUNES_SOCK );
+   }
+}
