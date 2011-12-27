@@ -162,17 +162,16 @@ player_seek(int seconds)
    player.seek(seconds);
 }
 
-/* TODO merge this with the player_play_prev_song into player_skip_song */
 void
-player_play_next_song(int skip)
+player_skip_song(int num)
 {
    if (!player.playing())
       return;
 
    switch (player_info.mode) {
    case MODE_LINEAR:
-      player_info.qidx += skip;
-      if (player_info.qidx >= player_info.queue->nfiles) {
+      player_info.qidx += num;
+      if (player_info.qidx >= player_info.queue->nfiles || player_info.qidx < 0) {
          player_info.qidx = 0;
          player_stop();
       } else
@@ -181,8 +180,11 @@ player_play_next_song(int skip)
       break;
 
    case MODE_LOOP:
-      player_info.qidx += skip;
-      if (player_info.qidx >= player_info.queue->nfiles)
+      player_info.qidx += num;
+      if ( player_info.qidx < 0 )
+         player_info.qidx += ( abs( player_info.qidx / player_info.queue->nfiles ) + 1 )
+                             * player_info.queue->nfiles;
+      else
          player_info.qidx %= player_info.queue->nfiles;
 
       player_play();
@@ -193,51 +195,6 @@ player_play_next_song(int skip)
       player_play();
       break;
    }
-}
-
-/* TODO (see comment for player_play_next_song) */
-void
-player_play_prev_song(int skip)
-{
-   if (!player.playing())
-      return;
-
-   switch (player_info.mode) {
-   case MODE_LINEAR:
-      player_info.qidx -= skip;
-      if (player_info.qidx < 0) {
-         player_info.qidx = 0;
-         player_stop();
-      } else
-         player_play();
-
-      break;
-
-   case MODE_LOOP:
-      skip %= player_info.queue->nfiles;
-      if (skip <= player_info.qidx)
-         player_info.qidx -= skip;
-      else
-         player_info.qidx = player_info.queue->nfiles - (skip + player_info.qidx);
-
-      player_play();
-      break;
-
-   case MODE_RANDOM:
-      player_info.qidx = rand() % player_info.queue->nfiles;
-      player_play();
-      break;
-   }
-}
-
-/* TODO merge with above... wtf didn't i do it that way!? */
-void
-player_skip_song(int num)
-{
-   if (num >= 0)
-      player_play_next_song(num);
-   else
-      player_play_prev_song(num * -1);
 }
 
 void
