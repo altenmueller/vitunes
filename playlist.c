@@ -343,10 +343,10 @@ playlist_filter(const playlist *p, bool m)
 int
 retrieve_playlist_filenames(const char *dirname, char ***fnames)
 {
-   char   *glob_pattern;
-   unsigned int     fcount;
-   glob_t  files;
-   int     globbed;
+   char        *glob_pattern;
+   unsigned int fcount;
+   glob_t       files;
+   int          globbed;
 
    /* build the search pattern */
    if (asprintf(&glob_pattern, "%s/*.playlist", dirname) == -1)
