@@ -253,6 +253,13 @@ main(int argc, char *argv[])
 
    sock_remove(sock);
 
+   free(player_backend);
+   free(input_file);
+   free(playlist_dir);
+   free(db_file);
+   free(conf_file);
+   free(vitunes_dir);
+
    /* do we have any odd cause for quitting? */
    if (QUIT_CAUSE != EXIT_NORMAL) {
       switch (QUIT_CAUSE) {
