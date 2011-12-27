@@ -109,8 +109,8 @@ sock_recv_and_exec(int sock)
 void
 sock_remove(int sock)
 {
-   if ( sock != -1 ) {
-      close( sock );
-      unlink( vitunes_sock );
+   if (sock != -1) {
+      close(sock);
+      unlink(vitunes_sock);
    }
 }
