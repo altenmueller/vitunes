@@ -23,8 +23,7 @@
 #include "socket.h"
 #include "commands.h"
 
-#define VITUNES_SOCK    "/tmp/.vitunes"
-
+char vitunes_sock[128];
 
 int
 sock_send_msg(const char *msg)
@@ -38,8 +37,8 @@ sock_send_msg(const char *msg)
       return -1;
 
    addr.sun_family = AF_UNIX;
-   strcpy(addr.sun_path, VITUNES_SOCK);
-   addr_len = sizeof(addr.sun_family) + strlen(VITUNES_SOCK) + 1;
+   strcpy(addr.sun_path, vitunes_sock);
+   addr_len = sizeof(addr.sun_family) + strlen(vitunes_sock) + 1;
 
    if(sendto(ret, msg, strlen(msg), 0, (struct sockaddr *) &addr, addr_len) == -1) {
       close(ret);
@@ -58,14 +57,14 @@ sock_listen(void)
    socklen_t            addr_len;
    int                  coe = 1;
 
-   unlink(VITUNES_SOCK);
+   sprintf(vitunes_sock, "/tmp/.vitunes-%d", getpid());
 
    if((ret = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
       return -1;
 
    addr.sun_family = AF_UNIX;
-   strcpy(addr.sun_path, VITUNES_SOCK);
-   addr_len = sizeof(addr.sun_family) + strlen(VITUNES_SOCK) + 1;
+   strcpy(addr.sun_path, vitunes_sock);
+   addr_len = sizeof(addr.sun_family) + strlen(vitunes_sock) + 1;
 
    if(bind(ret, (struct sockaddr *) &addr, addr_len) == -1)
       return -1;
@@ -112,6 +111,6 @@ sock_remove(int sock)
 {
    if ( sock != -1 ) {
       close( sock );
-      unlink( VITUNES_SOCK );
+      unlink( vitunes_sock );
    }
 }
