@@ -171,13 +171,13 @@ main(int argc, char *argv[])
    setup_viewing_playlist(mdb.library);
    ui.library->nrows  = mdb.nplaylists;
    playing_playlist = NULL;
+   player_info.mode = DEFAULT_PLAYER_MODE;
 
    /* load config file and run commands in it now */
    load_config();
 
    /* start media player child */
    player_init(player_backend);
-   player_info.mode = DEFAULT_PLAYER_MODE;
    atexit(player_destroy);
 
    /* initial painting of the display */
