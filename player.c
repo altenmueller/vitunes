@@ -80,7 +80,6 @@ player_init(const char *backend)
    bool   found;
    size_t i;
 
-   player_info.mode  = MODE_LINEAR;
    player_info.queue = NULL;
    player_info.qidx  = -1;
 
